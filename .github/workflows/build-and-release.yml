@@ -145,3 +145,17 @@ jobs:
         prerelease: ${{ contains(github.ref, '-') }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  notify:
+    needs: [test, build, release]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - name: Notify pipepush
+      run: |
+        curl -sf -X POST "$PIPEPUSH_SERVER/api/webhook" \
+          -H "Content-Type: application/json" \
+          -d "{\"token\":\"$PIPEPUSH_TOKEN\",\"status\":\"${{ (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) && 'failure' || 'success' }}\",\"pipeline\":\"$GITHUB_WORKFLOW\",\"branch\":\"$GITHUB_REF_NAME\",\"commit\":\"$GITHUB_SHA\",\"runId\":\"$GITHUB_RUN_NUMBER\"}"
+      env:
+        PIPEPUSH_TOKEN: ${{ secrets.PIPEPUSH_TOKEN }}
+        PIPEPUSH_SERVER: ${{ vars.PIPEPUSH_SERVER }}
