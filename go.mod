@@ -1,4 +1,4 @@
-module github.com/Gerry3010/minecraft-instance-switcher
+module github.com/GeraldHofbauerWeb/minecraft-instance-switcher
 
 go 1.25.1
 

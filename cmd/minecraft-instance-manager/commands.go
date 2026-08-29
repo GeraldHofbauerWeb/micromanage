@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/Gerry3010/minecraft-instance-switcher/internal/instance"
+	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
 	"github.com/spf13/cobra"
 )
 

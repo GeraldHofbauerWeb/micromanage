@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Gerry3010/minecraft-instance-switcher/internal/tui"
+	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/tui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

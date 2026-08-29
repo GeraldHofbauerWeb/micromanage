@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Gerry3010/minecraft-instance-switcher/internal/instance"
+	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"

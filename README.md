@@ -20,16 +20,16 @@ A modern, lightweight Minecraft instance manager with a beautiful terminal inter
 ### Installation
 
 #### Download Pre-built Binary
-Download the latest release for your platform from the [releases page](https://github.com/Gerry3010/minecraft-instance-switcher/releases).
+Download the latest release for your platform from the [releases page](https://github.com/GeraldHofbauerWeb/minecraft-instance-switcher/releases).
 
 #### Install with Go
 ```bash
-go install github.com/Gerry3010/minecraft-instance-switcher/cmd/minecraft-instance-manager@latest
+go install github.com/GeraldHofbauerWeb/minecraft-instance-switcher/cmd/minecraft-instance-manager@latest
 ```
 
 #### Build from Source
 ```bash
-git clone https://github.com/Gerry3010/minecraft-instance-switcher.git
+git clone https://github.com/GeraldHofbauerWeb/minecraft-instance-switcher.git
 cd minecraft-instance-switcher
 go build -o minecraft-instance-manager ./cmd/minecraft-instance-manager
 ```
@@ -293,7 +293,7 @@ Pre-built binaries are available for:
 - **macOS**: AMD64 (Intel), ARM64 (Apple Silicon)  
 - **Windows**: AMD64
 
-Download from the [releases page](https://github.com/Gerry3010/minecraft-instance-switcher/releases).
+Download from the [releases page](https://github.com/GeraldHofbauerWeb/minecraft-instance-switcher/releases).
 
 ### 🔍 Platform-Specific Troubleshooting
 
