@@ -52,6 +52,12 @@ func placeholders(p *Prepared, o Options) map[string]string {
 	if xuid == "" {
 		xuid = "0"
 	}
+	// An empty ${clientid} would put a blank argument on the command line,
+	// which some versions parse as the next flag's value.
+	clientID := o.Session.ClientID
+	if clientID == "" {
+		clientID = "0"
+	}
 	versionType := p.Version.Type
 	if versionType == "" {
 		versionType = "release"
@@ -65,7 +71,7 @@ func placeholders(p *Prepared, o Options) map[string]string {
 		"auth_session":      "token:" + o.Session.AccessToken + ":" + o.Session.UUID,
 		"user_type":         userType,
 		"user_properties":   "{}",
-		"clientid":          o.Session.ClientID,
+		"clientid":          clientID,
 
 		"version_name": p.Version.ID,
 		"version_type": versionType,
