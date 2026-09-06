@@ -1,368 +1,182 @@
 # Minecraft Instance Manager
 
-A modern, lightweight Minecraft instance manager with a beautiful terminal interface. Uses symlinks to instantly switch between different Minecraft setups without copying files.
+A Minecraft launcher and instance manager. Keep several setups side by side,
+switch between them instantly, and launch them — sign-in, version, mod loader
+and all — from one window.
 
-> 🤖 **AI Collaboration Notice**: This project was developed in collaboration with the Warp AI assistant (powered by Claude 3.5 Sonnet). The AI helped with code implementation, documentation, and project structure. While the core ideas and direction came from human creativity, the AI's assistance made this project more robust and feature-complete. We believe in transparency about AI usage while celebrating the potential of human-AI collaboration in software development.
+> 🤖 **AI collaboration notice**: this project is developed together with an AI
+> assistant. The direction is human; the assistant helps with implementation,
+> documentation and structure. We think it is worth being open about that.
 
-## ✨ Features
+## What it does
 
-- **⚡ Instant switching** - Uses symlinks, no file copying required
-- **💾 Space efficient** - No duplicate files, shared assets
-- **🔒 Safe backups** - Automatic backup before switching
-- **📊 Rich information** - Shows mods, configs, saves count for each instance
-- **🎨 Beautiful TUI** - Interactive terminal interface with Bubble Tea
-- **🧹 Modern design** - Written in Go with Cobra CLI framework
-- **🔄 Easy restore** - One command to restore original setup
-- **🌐 Cross-platform** - Works on Linux, macOS, and Windows (with considerations)
+- **Launches the game itself** — resolves the version, downloads libraries,
+  assets and natives, picks a matching Java runtime and builds the command line.
+- **Shares game content between instances.** Libraries, assets, versions and
+  Java runtimes live in one store instead of once per instance. On the machine
+  this was developed against, six instances held 19.9 GB of duplicated files
+  that deduplicate to 3.7 GB.
+- **Adopts what you already have.** Instances created by the official launcher
+  are read as they are: the Minecraft version, the mod loader, the heap size
+  and the JVM flags are all detected from `launcher_profiles.json` and
+  `versions/`.
+- **Runs modded instances without an installer** where the loader profile is
+  already on disk — which it is, for anything you have played before.
+- **Switches with symlinks**, so the game keeps writing its saves, screenshots
+  and configs into the instance directory exactly as before.
 
-## 🚀 Quick Start
+Supported loaders: NeoForge, Forge, Fabric and Quilt.
 
-### Installation
+## Installing
 
-#### Download Pre-built Binary
-Download the latest release for your platform from the [releases page](https://github.com/GeraldHofbauerWeb/minecraft-instance-switcher/releases).
+### From source
 
-#### Install with Go
-```bash
-go install github.com/GeraldHofbauerWeb/minecraft-instance-switcher/cmd/minecraft-instance-manager@latest
-```
-
-#### Build from Source
 ```bash
 git clone https://github.com/GeraldHofbauerWeb/minecraft-instance-switcher.git
 cd minecraft-instance-switcher
-go build -o minecraft-instance-manager ./cmd/minecraft-instance-manager
+make install
 ```
 
-### Usage
+That builds both binaries, puts them in `~/.local/bin`, and registers the GUI
+as a desktop application so it appears in the application menu.
 
-#### Interactive TUI Mode (Default)
-```bash
-# Launch the beautiful terminal interface
-# Automatically detects your OS and sets appropriate Minecraft paths
-minecraft-instance-manager
-```
+The GUI needs a C toolchain and the Gio development headers on Linux. Where
+Vulkan's headers are missing (`vulkan-headers` on Arch, `libvulkan-dev` on
+Debian) the build falls back to the OpenGL backend automatically.
 
-#### Command Line Mode
-```bash
-# Create instances
-minecraft-instance-manager create vanilla           # Clean Minecraft
-minecraft-instance-manager create modpack-1.20.1    # Your modpack
-minecraft-instance-manager create testing           # Testing environment
-
-# Switch between instances
-minecraft-instance-manager switch modpack-1.20.1   # Switch to modpack
-minecraft-instance-manager switch vanilla           # Switch to vanilla
-
-# List all instances with details
-minecraft-instance-manager list
-
-# Delete an instance
-minecraft-instance-manager delete old-instance
-
-# Restore original .minecraft
-minecraft-instance-manager restore
-```
-
-## 🎨 TUI Features
-
-The interactive terminal interface provides:
-
-- **🎨 Beautiful Interface** - Clean, modern terminal UI with colors and styling
-- **⌨️ Keyboard Navigation** - Full keyboard control with intuitive shortcuts
-- **📋 Instance List** - See all instances with mod/config/save counts at a glance
-- **🔍 Instance Details** - View detailed information about any instance
-- **⚡ Quick Switching** - Switch instances with just Enter key
-- **➕ Create/Delete** - Create new instances or delete existing ones
-- **🎆 Real-time Updates** - Interface updates instantly when changes are made
-
-### TUI Keyboard Shortcuts
-
-| Key | Action |
-|-----|--------|
-| `↑/↓` or `j/k` | Navigate up/down |
-| `Enter` | Switch to instance or view details |
-| `c` | Create new instance |
-| `d` | Delete selected instance |
-| `s` | Show detailed file panels (in detail view) |
-| `Tab/Shift+Tab` | Switch between panels (in panel view) |
-| `F5` | Refresh instance list |
-| `r` | Restore default .minecraft |
-| `?` | Toggle help |
-| `ESC` | Go back / Cancel |
-| `q` or `Ctrl+C` | Quit |
-
-## 📋 CLI Commands
-
-| Command | Description | Example |
-|---------|-------------|---------|
-| `create <name>` | Create a new instance | `minecraft-instance-manager create forge-1.20.1` |
-| `switch <name>` | Switch to an instance | `minecraft-instance-manager switch vanilla` |
-| `list` | List all instances with details | `minecraft-instance-manager list` |
-| `delete <name>` | Delete an instance | `minecraft-instance-manager delete old-instance` |
-| `restore` | Restore original .minecraft directory | `minecraft-instance-manager restore` |
-
-## 📁 How It Works
-
-### Directory Structure
-
-```
-~/.minecraft-instances/
-├── vanilla/
-│   ├── mods/           (empty)
-│   ├── config/
-│   ├── saves/
-│   └── ...
-├── modpack-1.20.1/
-│   ├── mods/           (108 mods)
-│   ├── config/
-│   ├── saves/
-│   └── ...
-└── testing/
-    ├── mods/           (1 mod)
-    ├── config/
-    ├── saves/
-    └── ...
-```
-
-### Symlink Magic
-
-When you switch instances:
-1. Current `~/.minecraft` is backed up to `~/.minecraft.backup`
-2. A symlink `~/.minecraft -> ~/.minecraft-instances/chosen-instance` is created
-3. Minecraft launcher uses the instance transparently
-
-## 🎯 Use Cases
-
-### Mod Development
-```bash
-./minecraft-instances create dev-environment
-# Add your mod to ~/.minecraft-instances/dev-environment/mods/
-./minecraft-instances switch dev-environment
-```
-
-### Different Minecraft Versions
-```bash
-./minecraft-instances create mc-1.19.4
-./minecraft-instances create mc-1.20.1
-./minecraft-instances create mc-1.21
-```
-
-### Modpack Testing
-```bash
-./minecraft-instances create modpack-backup
-./minecraft-instances create modpack-experimental
-# Test changes in experimental, keep backup safe
-```
-
-## 🛡️ Safety Features
-
-- **Automatic backups** - Your original .minecraft is always backed up
-- **Safe switching** - Validates instance exists before switching
-- **Easy restore** - One command restores original setup
-- **Non-destructive** - Never deletes your original data
-
-## 🔧 Advanced Usage
-
-### Adding Mods to an Instance
-```bash
-# Add mods directly to the instance
-cp my-mod.jar ~/.minecraft-instances/my-instance/mods/
-
-# Or switch to instance and use normal mod installation
-minecraft-instance-manager switch my-instance
-# Now use your launcher's mod management or copy mods to ~/.minecraft/mods/
-```
-
-### Sharing Instances
-```bash
-# Backup an instance
-tar -czf my-modpack.tar.gz ~/.minecraft-instances/my-modpack/
-
-# Restore on another machine
-tar -xzf my-modpack.tar.gz -C ~/
-```
-
-## 📊 Instance Information
-
-The `list` command shows detailed information:
-
-```
-Available instances:
-  - vanilla               (0 mods)
-  - sebi-1.20.1          (107 mods)
-  - vanillaplus-test      (1 mods)
-
-Current instance: sebi-1.20.1
-```
-
-## 🐛 Troubleshooting
-
-### Instance doesn't appear in list
-- Check that `~/.minecraft-instances/instance-name` exists
-- Ensure the directory has proper permissions
-
-### Minecraft won't launch
-- Verify the instance has all required files (copied during creation)
-- Check Minecraft version compatibility
-- Use `minecraft-instance-manager restore` to return to original setup
-
-### Lost original .minecraft
-- Your original is backed up at `~/.minecraft.backup`
-- Run `minecraft-instance-manager restore` to recover it
-
-## 🖥️ Platform Compatibility
-
-The Minecraft Instance Manager is designed to work across different operating systems with some platform-specific considerations:
-
-### ✅ Fully Supported Platforms
-
-| Platform | Status | Notes |
-|----------|--------|--------|
-| **Linux** | ✅ Full Support | Native symlink support, standard `.minecraft` path |
-| **macOS** | ✅ Full Support | Native symlink support, standard `.minecraft` path |
-| **WSL/WSL2** | ✅ Full Support | Linux compatibility within Windows |
-
-### ⚠️ Windows Considerations
-
-| Feature | Status | Requirements |
-|---------|--------|-------------|
-| **Basic Functionality** | ✅ Supported | Windows 10/11 |
-| **Symlink Creation** | ⚠️ Requires Privileges | Administrator rights OR Developer Mode |
-| **Minecraft Path** | ⚠️ Manual Config | May need to set custom path |
-
-#### Windows Setup Instructions
-
-**Option 1: Enable Developer Mode (Recommended)**
-1. Open Settings → Update & Security → For Developers
-2. Enable "Developer Mode"
-3. Restart your computer
-4. Run the application normally
-
-**Option 2: Run as Administrator**
-1. Right-click Command Prompt/PowerShell
-2. Select "Run as Administrator"
-3. Run minecraft-instance-manager commands
-
-**Option 3: Use WSL2 (Best Experience)**
-1. Install WSL2 with Ubuntu
-2. Install and run minecraft-instance-manager in WSL2
-3. Access Windows Minecraft installation via `/mnt/c/Users/.../AppData/Roaming/.minecraft`
-
-### 🗂️ Platform-Specific Paths
-
-#### Automatic Platform Detection
-
-The application **automatically detects your operating system** and sets appropriate default paths:
-
-| Platform | Default Path | Auto-Detected | Configurable |
-|----------|-------------|---------------|--------------|
-| **Linux** | `~/.minecraft` | ✅ Yes | ✅ Yes |
-| **macOS** | `~/Library/Application Support/minecraft` | ✅ Yes | ✅ Yes |
-| **Windows** | `%APPDATA%\.minecraft` | ✅ Yes | ✅ Yes |
-
-> 💡 **No manual configuration needed!** The app automatically uses the correct path for your platform.
-
-#### Configuration Locations
-
-| Platform | Config Directory |
-|----------|-----------------|
-| **Linux** | `~/.config/minecraft-instance/` |
-| **macOS** | `~/Library/Application Support/minecraft-instance/` |
-| **Windows** | `%APPDATA%\minecraft-instance\` |
-
-### 🔧 Custom Path Configuration
-
-If your Minecraft installation is in a non-standard location:
-
-```bash
-# Set custom Minecraft path
-minecraft-instance-manager config minecraft-path "C:\Games\Minecraft\.minecraft"
-
-# Set custom instances directory  
-minecraft-instance-manager config instances-path "D:\MinecraftInstances"
-
-# Verify configuration
-minecraft-instance-manager config show
-```
-
-### 🚀 Build Information
-
-Pre-built binaries are available for:
-- **Linux**: AMD64, ARM64
-- **macOS**: AMD64 (Intel), ARM64 (Apple Silicon)  
-- **Windows**: AMD64
+### Pre-built binaries
 
 Download from the [releases page](https://github.com/GeraldHofbauerWeb/minecraft-instance-switcher/releases).
+The CLI (`-cli-`) and the GUI (`-gui-`) are separate archives; the CLI is a
+static binary for every platform, the GUI is built per platform.
 
-### 🔍 Platform-Specific Troubleshooting
+## Using it
 
-#### Windows Issues
+Run `minecraft-launcher`, or start it from the application menu.
 
-**"Access Denied" or Symlink Errors:**
-- Enable Developer Mode or run as Administrator
-- Check if Minecraft path is correct: `%APPDATA%\.minecraft`
-- Consider using WSL2 for better compatibility
+1. **Sign in.** Microsoft accounts need an Azure application id (see below); a
+   local account plays single-player in full and is offered by default.
+2. **Pick an instance**, or create one. New instances are empty and instant;
+   cloning an existing one is an explicit choice.
+3. **Pick the system** — Vanilla or a mod loader. It defaults to the instance's
+   own, and an override applies to that launch only unless you make it the
+   default.
+4. **Edit** the instance: mods, configs, saves, the Minecraft version, the
+   loader, the heap size, the Java path and JVM arguments.
+5. **Play.**
 
-**Path Issues:**
-```bash
-# Windows example paths
-minecraft-instance-manager config minecraft-path "C:\Users\Username\AppData\Roaming\.minecraft"
-minecraft-instance-manager config instances-path "C:\MinecraftInstances"
+### From the command line
+
+Everything the GUI does is available in `minecraft-instance-manager`, which is
+also how it is tested.
+
+| Command | What it does |
+|---|---|
+| `list` | Show instances with their version, loader and counts |
+| `create <name> [--clone <src>]` | Create an instance, empty by default |
+| `switch <name>` | Make an instance the active one |
+| `delete <name>` | Remove an instance (never the active one) |
+| `restore` | Put the original `.minecraft` back |
+| `instance detect [--all] [--write]` | Work out what an instance runs |
+| `instance show <name>` / `instance set <name> <key> <value>` | Read and change settings |
+| `launch <name> --offline <player>` | Launch, with `--dry-run` to print the command line |
+| `java list` | Every Java runtime found, including those inside instances |
+| `verify [--version <id>]` | Download and check everything a version needs |
+| `migrate [--dry-run]` | Build the shared store from the instances |
+| `repair-perms` | Restore the executable bit on bundled Java runtimes |
+| `config show` / `config <key> [path]` | Read and change paths |
+
+## How it works
+
+### Instances and the symlink
+
+Instances live in `~/.minecraft-instances/<name>` (configurable). Switching
+moves any real `~/.minecraft` aside and links it to the chosen instance, so the
+game — and any other launcher — finds it where it expects.
+
+Launching activates the instance first, because the game's working directory is
+that symlink.
+
+### The shared store
+
+Everything downloadable lives once, under
+`~/.config/minecraft-instance/shared`:
+
+```
+shared/
+  versions/<id>/<id>.{json,jar}
+  libraries/<maven path>/…
+  assets/{indexes,objects,log_configs}
+  natives/<id>/
+  runtimes/<component>/
 ```
 
-#### macOS Issues
+Instances keep only what is yours: `mods`, `config`, `saves`, `resourcepacks`,
+`shaderpacks`, `screenshots`, `options.txt` and the rest. Every shared path is
+passed to the game explicitly on the command line, which is what lets the
+shared store and the symlink coexist.
 
-**Permissions:**
+`migrate` hard-links an instance's existing copies into the store. It only
+reads the instances, costs no extra disk space, and deletes nothing.
+
+### instance.json
+
+Each instance gains an `instance.json` recording its Minecraft version, loader,
+heap size, Java path and JVM arguments. Instances that predate it are read as
+unconfigured; nothing is written until you save settings or launch. Run
+`instance detect --all` to see what would be filled in, and `--write` to keep it.
+
+## Microsoft sign-in
+
+Signing in with a Microsoft account requires your own Azure application:
+
+1. Register an application at portal.azure.com — account type *Personal
+   Microsoft accounts only*, platform *Mobile and desktop applications*,
+   redirect `http://localhost`, public client flows enabled.
+2. Request access to the Minecraft launcher API from Microsoft. Until that is
+   approved, the sign-in endpoint refuses the client id.
+
+Supply the id at build time (`make MSA_CLIENT_ID=<uuid>`), through
+`MIM_MSA_CLIENT_ID`, or with `config msa-client-id <uuid>`. Without one, only
+local accounts are offered.
+
+**On credentials:** accounts are stored in
+`~/.config/minecraft-instance/accounts.json` with mode 0600. The file is not
+encrypted — Go has no cross-platform keyring without cgo, and claiming
+otherwise would be worse than saying so.
+
+## Platform notes
+
+| Platform | Status |
+|---|---|
+| Linux | Full support |
+| macOS | Supported; release builds are unsigned, so Gatekeeper needs a right-click → Open on first run |
+| Windows | Symlinks need Developer Mode or an administrator; the CLI and GUI both build |
+
+## Development
+
 ```bash
-# Give terminal full disk access in Security & Privacy settings
-# Or use chmod to fix permissions
-chmod -R 755 ~/.minecraft-instances/
+make build   # both binaries
+make test    # the whole suite, no display needed
+make lint    # gofmt and go vet
+make run     # build and start the GUI
+make install # install and register the desktop entry
 ```
 
-#### Linux Issues
+The rule that keeps this testable: `internal/launcher` holds the application
+logic and imports no Gio, `internal/gui` holds only layout. Break it and the
+build fails rather than the tests quietly needing a display.
 
-**Snap/Flatpak Minecraft:**
-- May require custom path configuration
-- Check if Minecraft runs in sandboxed environment
-
-### 🧪 Testing Your Platform
-
-Verify compatibility on your system:
+To look at the interface without running it:
 
 ```bash
-# Test basic functionality
-minecraft-instance-manager config show
-
-# Test instance creation (safe)
-minecraft-instance-manager create test-compatibility
-
-# Test symlink creation (creates backup first)
-minecraft-instance-manager switch test-compatibility
-
-# Restore original setup
-minecraft-instance-manager restore
-
-# Clean up test
-minecraft-instance-manager delete test-compatibility
+GUI_SHOT_DIR=/tmp/shots go test -tags gui_screenshot -run TestRenderScreens ./internal/gui/
 ```
 
-## 🤝 Contributing
+## Licence
 
-This script is simple and focused. Contributions welcome for:
-- Bug fixes
-- Small enhancements
-- Documentation improvements
-- Platform compatibility
-
-## 📜 License
-
-MIT License - Feel free to use, modify, and share!
-
-## 🙏 Credits
-
-Originally created for VanillaPlusAdditions mod development workflow.
+MIT. Use it, change it, share it.
 
 ---
 
-**Happy mining!** ⛏️✨
+**Happy mining!** ⛏️

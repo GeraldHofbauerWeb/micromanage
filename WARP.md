@@ -4,9 +4,11 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 ## Project Overview
 
-The Minecraft Instance Manager is a modern Go application that provides both a beautiful terminal user interface (TUI) and command-line interface (CLI) for managing multiple Minecraft installations using symlinks. It enables instant switching between different Minecraft setups (modpacks, versions, configurations) without copying files or wasting disk space.
+The Minecraft Instance Manager is a Go application that manages multiple Minecraft installations and launches them. It provides a graphical launcher (Gio) and a command-line interface; the Bubble Tea TUI was removed in v2.
 
-**Tech Stack**: Go, Cobra (CLI framework), Viper (configuration), Bubble Tea (TUI framework), Lip Gloss (styling)
+It resolves versions, downloads libraries, assets and natives into a store shared across instances, picks a matching Java runtime and builds the launch command line itself. Switching between instances still uses symlinks.
+
+**Tech stack**: Go, Cobra (CLI), Viper (config), Gio (GUI)
 
 ## Core Architecture
 
@@ -24,23 +26,27 @@ The system works by:
 └── testing/          # Development instance
 ```
 
-### Key Components
-- **Main Application**: `cmd/minecraft-instance-manager/main.go` - Entry point with Cobra CLI setup
-- **CLI Commands**: `cmd/minecraft-instance-manager/commands.go` - Cobra command implementations
-- **Instance Manager**: `internal/instance/manager.go` - Core business logic for instance management
-- **TUI Interface**: `internal/tui/` - Bubble Tea terminal user interface
-- **GitHub Actions**: `.github/workflows/build-and-release.yml` - CI/CD pipeline for cross-platform builds
-- **Documentation**: `README.md`, `examples/USAGE_EXAMPLES.md`, and `WARP.md`
+### Key components
+- `cmd/minecraft-instance-manager/` — the CLI, built with CGO_ENABLED=0 for every target
+- `cmd/minecraft-instance-manager-gui/` — the GUI; separate because Gio needs cgo
+- `internal/instance/` — instances, their metadata and detection
+- `internal/mojang/` — version manifests, inheritance, per-platform rules
+- `internal/download/` — parallel, SHA-1 verified downloads
+- `internal/java/` — runtime detection and selection
+- `internal/launch/` — the shared store, preparation, arguments, the process
+- `internal/launcher/` — application logic for the GUI; **imports no Gio**
+- `internal/gui/` — Gio layout only
+- `Makefile` — build, test, and `install` which registers the desktop entry
 
 ## Common Commands
 
 ### Development and Testing
 ```bash
-# Build the application
-go build -o minecraft-instance-manager ./cmd/minecraft-instance-manager
+# Build both binaries
+make build
 
-# Run tests
-go test ./...
+# Run tests (no display required)
+make test
 
 # Test the application locally
 ./minecraft-instance-manager list
@@ -51,25 +57,21 @@ go test ./...
 ./minecraft-instance-manager list
 ./minecraft-instance-manager restore
 
-# Test TUI mode
-./minecraft-instance-manager
-
 # Clean up test instance
 ./minecraft-instance-manager delete test-instance
 ```
 
 ### Build and Release
 ```bash
-# Build for current platform
-go build -o minecraft-instance-manager ./cmd/minecraft-instance-manager
+# The CLI cross-compiles everywhere without cgo
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/minecraft-instance-manager
 
-# Build for all platforms (requires Go 1.21+)
-GOOS=linux GOARCH=amd64 go build -o dist/minecraft-instance-manager-linux-amd64 ./cmd/minecraft-instance-manager
-GOOS=windows GOARCH=amd64 go build -o dist/minecraft-instance-manager-windows-amd64.exe ./cmd/minecraft-instance-manager
-GOOS=darwin GOARCH=amd64 go build -o dist/minecraft-instance-manager-darwin-amd64 ./cmd/minecraft-instance-manager
+# The GUI needs cgo on Linux and macOS, so it builds on a native runner.
+# Windows is the exception: Gio is pure Go there.
+make gui
 
-# Install locally
-go install ./cmd/minecraft-instance-manager
+# Install locally and register the desktop entry
+make install
 ```
 
 ### Code Quality
@@ -92,26 +94,16 @@ go list -u -m all
 
 ## Application Architecture
 
-### Project Structure
-The Go application follows standard Go project layout:
-1. **cmd/minecraft-instance-manager/** - Application entry point and CLI setup
-2. **internal/instance/** - Core business logic for instance management
-3. **internal/tui/** - Bubble Tea terminal user interface components
-4. **pkg/** - Reusable packages (configuration, utilities)
+### Key types
+- `instance.Manager` — instances, config and the symlink
+- `instance.Meta` — per-instance settings in `instance.json`
+- `mojang.Version` — a version manifest, both argument schemas
+- `launch.Layout` — the shared store's paths
+- `launch.Preparer` — resolve a version and fetch what it needs
+- `java.Detector` — find and choose a runtime
+- `launcher.Controller` / `launcher.Store` — GUI logic, Gio-free
 
-### Key Components
-- `instance.Manager` - Core instance management with full CRUD operations
-- `tui.Model` - Bubble Tea model handling UI state and user interactions
-- `cobra.Command` - CLI command definitions with proper argument validation
-- GitHub Actions - Automated testing and cross-platform binary builds
-
-### TUI Architecture
-- **State Management** - Clean state transitions (list → detail → create → delete)
-- **Keyboard Handling** - Intuitive shortcuts with help system
-- **Real-time Updates** - Immediate UI refresh after operations
-- **Error Handling** - User-friendly error messages and recovery
-
-### Safety Mechanisms
+### Safety mechanisms
 - Always backs up current .minecraft before switching
 - Validates instance exists before switching  
 - Uses symlinks (non-destructive, easily reversible)
@@ -125,7 +117,7 @@ The Go application follows standard Go project layout:
 - Follow Go conventions (gofmt, go vet, golint)
 - Use meaningful package and function names
 - Include comprehensive error handling with wrapped errors
-- Add helpful user messages and feedback in both CLI and TUI modes
+- Add helpful user messages and feedback in both the CLI and the GUI
 - Use structured logging when necessary
 
 ### Testing Approach
@@ -133,13 +125,11 @@ The Go application follows standard Go project layout:
 - Test error conditions (invalid instance names, missing directories, permission issues)
 - Verify symlink creation and backup functionality  
 - Test mod/config/save counting accuracy
-- Test TUI state transitions and keyboard interactions
 - Test CLI command parsing and validation
 
 ### File Structure Expectations
 - Follow Go project layout standards
 - Keep business logic in internal/instance package
-- Separate TUI concerns in internal/tui package
 - Use dependency injection for testability
 - Keep CLI commands thin, delegating to business logic
 
@@ -171,3 +161,30 @@ The Go application follows standard Go project layout:
 - Each instance maintains its own mods/ directory
 - Mod counts are displayed for quick reference
 - Easy to add/remove mods per instance
+
+## Architectural rules
+
+1. **`internal/launcher` must never import Gio.** The application logic lives
+   there so it can be tested without a display; breaking the rule turns a
+   headless CI run into a build failure, which is the point.
+2. **Nothing in `internal/gui/screen_*.go` performs I/O.** No `os`, no
+   `net/http`, no `exec`. Screens dispatch actions; the controller does the work.
+3. **`Controller.Dispatch` never blocks.** A blocked render loop is a frozen
+   window.
+4. **Progress is sampled, repaints are coalesced.** An asset index has ~4000
+   objects; per-item events would swamp the frame budget.
+5. **Reading never writes.** `LoadMeta` on an instance with no `instance.json`
+   returns defaults and touches nothing, so `list` cannot migrate anything.
+
+## Things that have bitten us
+
+- `copyFile` once ended in `os.WriteFile(dst, data, 0644)`, which stripped the
+  executable bit from bundled Java runtimes and left instances unable to run
+  their own JVM. Preserve the source mode; `fsutil_test.go` guards it.
+- `versions/` contains loose files (`jre_manifest.json`,
+  `version_manifest_v2.json`) alongside the version directories. Filter them.
+- A launcher profile's display name lies; `lastVersionId` is authoritative.
+- Merging a loader profile must put its libraries *before* the parent's and
+  dedupe keeping the first, or the game dies with `NoSuchMethodError`.
+- An unknown `${token}` in the arguments must survive verbatim. Blanking it
+  turns a readable error into an opaque crash.
