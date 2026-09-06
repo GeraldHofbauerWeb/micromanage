@@ -1,9 +1,9 @@
 package instance
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -252,12 +252,41 @@ func (m *Manager) GetConfig() map[string]string {
 	}
 }
 
-func (m *Manager) CreateInstance(name string) error {
-	if name == "" {
-		return fmt.Errorf("instance name cannot be empty")
-	}
+// essentialDirs are created in every instance regardless of how it was made.
+var essentialDirs = []string{"mods", "config", "saves", "resourcepacks", "shaderpacks"}
 
-	instancePath := filepath.Join(m.InstancesPath, name)
+// CreateOptions controls how a new instance is populated.
+type CreateOptions struct {
+	// CloneFrom names an existing instance to copy content from. Empty means
+	// an empty skeleton, which is the default: cloning here costs gigabytes,
+	// and the shared store supplies assets, libraries and versions anyway.
+	CloneFrom string
+
+	// CloneFromMinecraftDir copies the current .minecraft directory instead of
+	// a named instance. This is what create did unconditionally before v2.
+	CloneFromMinecraftDir bool
+
+	// IncludeSaves and IncludeScreenshots opt into the two directories that
+	// dominate a clone's size. Both default to off.
+	IncludeSaves       bool
+	IncludeScreenshots bool
+
+	Ctx      context.Context
+	Progress func(copied, total int64, current string)
+}
+
+// CreateInstance creates a new, empty instance.
+func (m *Manager) CreateInstance(name string) error {
+	return m.CreateInstanceWithOptions(name, CreateOptions{})
+}
+
+// CreateInstanceWithOptions creates an instance, optionally cloning content
+// from an existing instance or from the current .minecraft directory.
+func (m *Manager) CreateInstanceWithOptions(name string, o CreateOptions) error {
+	instancePath, err := m.InstancePath(name)
+	if err != nil {
+		return err
+	}
 
 	// Check if instance already exists
 	if _, err := os.Stat(instancePath); err == nil {
@@ -274,25 +303,20 @@ func (m *Manager) CreateInstance(name string) error {
 		return fmt.Errorf("failed to create instance directory: %w", err)
 	}
 
-	// Copy base minecraft structure if it exists and is not a symlink
-	if info, err := os.Lstat(m.MinecraftPath); err == nil {
-		// If it's a symlink, resolve it and copy from the actual directory
-		if info.Mode()&os.ModeSymlink != 0 {
-			if target, err := os.Readlink(m.MinecraftPath); err == nil {
-				if err := copyDir(target, instancePath); err != nil {
-					return fmt.Errorf("failed to copy minecraft directory: %w", err)
-				}
-			}
-		} else {
-			// It's a regular directory
-			if err := copyDir(m.MinecraftPath, instancePath); err != nil {
-				return fmt.Errorf("failed to copy minecraft directory: %w", err)
-			}
+	if src, err := m.cloneSource(o); err != nil {
+		return err
+	} else if src != "" {
+		opts := CopyOptions{
+			Ctx:      o.Ctx,
+			Skip:     cloneSkip(o),
+			Progress: o.Progress,
+		}
+		if err := CopyTree(src, instancePath, opts); err != nil {
+			return fmt.Errorf("failed to copy instance content: %w", err)
 		}
 	}
 
 	// Create essential directories
-	essentialDirs := []string{"mods", "config", "saves", "resourcepacks", "shaderpacks"}
 	for _, dir := range essentialDirs {
 		dirPath := filepath.Join(instancePath, dir)
 		if err := os.MkdirAll(dirPath, 0755); err != nil {
@@ -304,11 +328,10 @@ func (m *Manager) CreateInstance(name string) error {
 }
 
 func (m *Manager) SwitchInstance(name string) error {
-	if name == "" {
-		return fmt.Errorf("instance name cannot be empty")
+	instancePath, err := m.InstancePath(name)
+	if err != nil {
+		return err
 	}
-
-	instancePath := filepath.Join(m.InstancesPath, name)
 
 	// Check if instance exists
 	if _, err := os.Stat(instancePath); os.IsNotExist(err) {
@@ -424,7 +447,10 @@ func (m *Manager) GetActiveInstance() string {
 }
 
 func (m *Manager) GetInstanceInfo(name string) (*InstanceInfo, error) {
-	instancePath := filepath.Join(m.InstancesPath, name)
+	instancePath, err := m.InstancePath(name)
+	if err != nil {
+		return nil, err
+	}
 
 	if _, err := os.Stat(instancePath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("instance '%s' does not exist", name)
@@ -448,20 +474,13 @@ func (m *Manager) GetInstanceInfo(name string) (*InstanceInfo, error) {
 }
 
 func (m *Manager) DeleteInstance(name string) error {
-	if name == "" {
-		return fmt.Errorf("instance name cannot be empty")
+	if err := m.CanDelete(name); err != nil {
+		return err
 	}
 
-	instancePath := filepath.Join(m.InstancesPath, name)
-
-	// Check if instance exists
-	if _, err := os.Stat(instancePath); os.IsNotExist(err) {
-		return fmt.Errorf("instance '%s' does not exist", name)
-	}
-
-	// Check if it's the active instance
-	if m.GetActiveInstance() == name {
-		return fmt.Errorf("cannot delete active instance '%s'. Switch to another instance first", name)
+	instancePath, err := m.InstancePath(name)
+	if err != nil {
+		return err
 	}
 
 	// Remove the instance directory
@@ -469,41 +488,6 @@ func (m *Manager) DeleteInstance(name string) error {
 }
 
 // Helper functions
-
-func copyDir(src, dst string) error {
-	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		relPath, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-
-		dstPath := filepath.Join(dst, relPath)
-
-		if d.IsDir() {
-			return os.MkdirAll(dstPath, 0755)
-		}
-
-		// Skip copying certain files/directories
-		if strings.Contains(relPath, ".git") || strings.Contains(relPath, ".DS_Store") {
-			return nil
-		}
-
-		return copyFile(path, dstPath)
-	})
-}
-
-func copyFile(src, dst string) error {
-	data, err := os.ReadFile(src)
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(dst, data, 0644)
-}
 
 func countJarFiles(dir string) int {
 	count := 0

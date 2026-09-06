@@ -1,0 +1,60 @@
+package instance
+
+// ConfigKey describes one entry of the manager configuration. It is the single
+// source of truth for both the display order and which keys may be written —
+// GetConfig returns a map, so without this the CLI and GUI would each invent
+// their own (and non-deterministic) ordering.
+type ConfigKey struct {
+	Key         string
+	Label       string
+	Description string
+	Editable    bool
+}
+
+// ConfigKeys returns the configuration keys in canonical display order.
+// app-dir and config-file are derived at startup and rejected by UpdateConfig,
+// so they are marked read-only rather than offered for editing.
+func ConfigKeys() []ConfigKey {
+	return []ConfigKey{
+		{
+			Key:         "minecraft-path",
+			Label:       "Minecraft directory",
+			Description: "The path Minecraft launches from; the active instance is linked here.",
+			Editable:    true,
+		},
+		{
+			Key:         "instances-path",
+			Label:       "Instances directory",
+			Description: "Where instance directories are stored.",
+			Editable:    true,
+		},
+		{
+			Key:         "backup-path",
+			Label:       "Backup directory",
+			Description: "Where the original .minecraft is kept while an instance is active.",
+			Editable:    true,
+		},
+		{
+			Key:         "app-dir",
+			Label:       "Application directory",
+			Description: "Derived from the OS config directory.",
+			Editable:    false,
+		},
+		{
+			Key:         "config-file",
+			Label:       "Configuration file",
+			Description: "Derived from the application directory.",
+			Editable:    false,
+		},
+	}
+}
+
+// IsEditableConfigKey reports whether a key may be passed to UpdateConfig.
+func IsEditableConfigKey(key string) bool {
+	for _, k := range ConfigKeys() {
+		if k.Key == key {
+			return k.Editable
+		}
+	}
+	return false
+}
