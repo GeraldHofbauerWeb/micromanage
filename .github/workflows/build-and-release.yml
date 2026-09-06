@@ -7,35 +7,54 @@ on:
   pull_request:
     branches: [ main, master ]
 
-# Add permissions for the workflow to create releases
 permissions:
-  contents: write  # Required to create releases and upload assets
-  packages: write  # Required for package publishing (if needed)
-  actions: read    # Required to read workflow artifacts
+  contents: write
+  packages: write
+  actions: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.21'
-    
+        # Follow go.mod rather than pinning a version here; the repo already
+        # uses language features newer than the version this used to name.
+        go-version-file: go.mod
+
+    # The GUI package needs Gio's headers to compile. Everything the launcher
+    # decides lives in internal/launcher, which has no such dependency, but
+    # ./... still has to build.
+    - name: Install Gio build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          gcc pkg-config libwayland-dev libx11-dev libx11-xcb-dev \
+          libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev \
+          libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev \
+          libxxf86vm-dev libvulkan-dev wayland-protocols xorg-dev
+
+    # No display is available here, and none is needed: a test that wants one
+    # means the layering has been violated.
     - name: Test
-      run: go test -v ./...
-    
-    - name: Build
-      run: go build -v ./...
-    
+      run: go test -race ./...
+
     - name: Vet
       run: go vet ./...
 
-  build:
+    - name: Check formatting
+      run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+
+  # The CLI keeps its original build story: every target cross-compiled from a
+  # single Linux host with cgo disabled.
+  build-cli:
     needs: test
     runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: 0
     strategy:
       matrix:
         os: [linux, windows, darwin]
@@ -43,15 +62,15 @@ jobs:
         exclude:
           - os: windows
             arch: arm64
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.21'
-    
+        go-version-file: go.mod
+
     - name: Build binary
       env:
         GOOS: ${{ matrix.os }}
@@ -61,81 +80,128 @@ jobs:
         if [ "${{ matrix.os }}" = "windows" ]; then
           BINARY_NAME="${BINARY_NAME}.exe"
         fi
-        
+
         mkdir -p dist
-        go build -ldflags="-s -w" -o "dist/${BINARY_NAME}" ./cmd/minecraft-instance-manager
-        
-        # Create archive with proper naming
+        go build -ldflags="-s -w -X main.Version=${GITHUB_REF_NAME}" \
+          -o "dist/${BINARY_NAME}" ./cmd/minecraft-instance-manager
+
         cd dist
+        ARCHIVE="minecraft-instance-manager-cli-${{ matrix.os }}-${{ matrix.arch }}"
         if [ "${{ matrix.os }}" = "windows" ]; then
-          zip "minecraft-instance-manager-${{ matrix.os }}-${{ matrix.arch }}.zip" "${BINARY_NAME}"
+          zip "${ARCHIVE}.zip" "${BINARY_NAME}"
         else
-          tar -czf "minecraft-instance-manager-${{ matrix.os }}-${{ matrix.arch }}.tar.gz" "${BINARY_NAME}"
+          tar -czf "${ARCHIVE}.tar.gz" "${BINARY_NAME}"
         fi
-        
-        # Clean up the individual binary to avoid confusion
         rm "${BINARY_NAME}"
-        
-        # Debug: List what we created
         ls -la
-    
+
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: minecraft-instance-manager-${{ matrix.os }}-${{ matrix.arch }}
+        name: minecraft-instance-manager-cli-${{ matrix.os }}-${{ matrix.arch }}
         path: |
-          dist/minecraft-instance-manager-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
-          dist/minecraft-instance-manager-${{ matrix.os }}-${{ matrix.arch }}.zip
+          dist/*.tar.gz
+          dist/*.zip
+        retention-days: 30
+        if-no-files-found: ignore
+
+  # The GUI needs cgo on Linux and macOS, so it builds on native runners.
+  # Windows is the exception: Gio is pure Go there and still cross-compiles.
+  build-gui:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Pinned to 22.04 rather than latest: linking against a newer glibc
+          # than users have is the classic way to ship a binary that will not
+          # start.
+          - { runner: ubuntu-22.04, goos: linux, goarch: amd64, cgo: 1 }
+          - { runner: ubuntu-22.04, goos: windows, goarch: amd64, cgo: 0 }
+          - { runner: macos-14, goos: darwin, goarch: arm64, cgo: 1 }
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+
+    - name: Install Gio build dependencies
+      if: startsWith(matrix.runner, 'ubuntu') && matrix.cgo == 1
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          gcc pkg-config libwayland-dev libx11-dev libx11-xcb-dev \
+          libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev \
+          libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev \
+          libxxf86vm-dev libvulkan-dev wayland-protocols xorg-dev
+
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+        CGO_ENABLED: ${{ matrix.cgo }}
+      run: |
+        BINARY_NAME="minecraft-instance-manager-gui"
+        if [ "${{ matrix.goos }}" = "windows" ]; then
+          BINARY_NAME="${BINARY_NAME}.exe"
+        fi
+
+        mkdir -p dist
+        go build -ldflags="-s -w -X main.Version=${GITHUB_REF_NAME} -X main.defaultMSAClientID=${{ vars.MSA_CLIENT_ID }}" \
+          -o "dist/${BINARY_NAME}" ./cmd/minecraft-instance-manager-gui
+
+        cd dist
+        ARCHIVE="minecraft-instance-manager-gui-${{ matrix.goos }}-${{ matrix.goarch }}"
+        if [ "${{ matrix.goos }}" = "windows" ]; then
+          zip "${ARCHIVE}.zip" "${BINARY_NAME}"
+        else
+          tar -czf "${ARCHIVE}.tar.gz" "${BINARY_NAME}"
+        fi
+        rm "${BINARY_NAME}"
+        ls -la
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: minecraft-instance-manager-gui-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: |
+          dist/*.tar.gz
+          dist/*.zip
         retention-days: 30
         if-no-files-found: ignore
 
   release:
-    needs: build
+    needs: [build-cli, build-gui]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
-      contents: write  # Explicitly grant write access to repository contents
-      actions: read    # Read access to download artifacts
-    
+      contents: write
+      actions: read
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Download all artifacts
       uses: actions/download-artifact@v4
       with:
         path: artifacts
-    
+
     - name: Prepare release assets
       run: |
         mkdir -p release-assets
-        
-        # Debug: Show what we downloaded
         echo "Downloaded artifacts:"
-        find artifacts -type f -name "*.tar.gz" -o -name "*.zip" | sort
-        
-        # Copy archives to release assets
+        find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" \) | sort
+
         find artifacts -name "*.tar.gz" -exec cp {} release-assets/ \;
         find artifacts -name "*.zip" -exec cp {} release-assets/ \;
-        
-        # Debug: Show final release assets
+
         echo "Release assets:"
         ls -la release-assets/
-        
-        # Test a few archives to ensure they contain the binary directly
-        echo "Testing archive contents:"
-        for archive in release-assets/*.tar.gz; do
-          if [ -f "$archive" ]; then
-            echo "Contents of $(basename "$archive"):"
-            tar -tzf "$archive" | head -5
-          fi
-        done
-        for archive in release-assets/*.zip; do
-          if [ -f "$archive" ]; then
-            echo "Contents of $(basename "$archive"):"
-            unzip -l "$archive" | head -10
-          fi
-        done
-    
+
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
@@ -147,7 +213,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   notify:
-    needs: [test, build, release]
+    needs: [test, build-cli, build-gui, release]
     if: always()
     runs-on: ubuntu-latest
     steps:

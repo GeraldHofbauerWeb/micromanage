@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Minecraft Instance Manager
+GenericName=Minecraft Launcher
+Comment=Manage Minecraft instances and launch them
+Exec=@BINDIR@/minecraft-launcher
+Icon=minecraft-instance-manager
+Terminal=false
+Categories=Game;
+Keywords=minecraft;modpack;forge;neoforge;fabric;launcher;
+StartupNotify=true
+StartupWMClass=Minecraft Instance Manager
+X-GNOME-UsesNotifications=false
