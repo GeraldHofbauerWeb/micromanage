@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 )
 
 const (
@@ -41,6 +42,13 @@ type Instance struct {
 	ConfigCount int
 	SaveCount   int
 	IsActive    bool
+
+	// v2 metadata, read from instance.json. Instances created before it
+	// existed report Configured false and leave the rest zero.
+	Configured       bool
+	MinecraftVersion string
+	Loader           LoaderSpec
+	LastPlayed       time.Time
 }
 
 type InstanceInfo struct {
@@ -425,6 +433,15 @@ func (m *Manager) ListInstances() ([]Instance, error) {
 		// Count saves
 		savesPath := filepath.Join(instancePath, "saves")
 		instance.SaveCount = countDirectories(savesPath)
+
+		// Metadata is optional; a missing or unreadable file simply leaves
+		// the instance reported as unconfigured.
+		if meta, found, err := LoadMeta(instancePath); err == nil && found {
+			instance.Configured = meta.Configured()
+			instance.MinecraftVersion = meta.MinecraftVersion
+			instance.Loader = meta.Loader
+			instance.LastPlayed = meta.LastPlayed
+		}
 
 		instances = append(instances, instance)
 	}
