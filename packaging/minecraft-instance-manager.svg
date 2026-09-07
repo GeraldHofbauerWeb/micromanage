@@ -1,12 +1,44 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
-  <title>Minecraft Instance Manager</title>
-  <rect width="128" height="128" rx="24" fill="#1E2128"/>
-  <!-- An isometric block: three faces, the launcher's one recognisable shape. -->
-  <g transform="translate(64 66)">
-    <path d="M0-34 34-16 0 2-34-16Z" fill="#6FBF73"/>
-    <path d="M-34-16 0 2 0 38-34 20Z" fill="#3E7A4B"/>
-    <path d="M34-16 0 2 0 38 34 20Z" fill="#2E5C39"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-labelledby="title desc">
+  <title id="title">Minecraft Instance Manager</title>
+  <desc id="desc">Three stacked isometric blocks; the top one is highlighted as the active instance.</desc>
+
+  <!--
+    The mark is the launcher's own subject: several instances kept side by
+    side with one of them active. A single block would say "Minecraft"; three
+    stacked, with the top one in the accent the app uses for its primary
+    action, say what this program is for.
+    Palette and geometry are the app's own (2:1 isometric, accent #5B8DEF).
+
+    Each slab is 300 wide and 150 tall on its top face, 36 deep, and the three
+    sit 88 apart — close enough to read as one stack, far enough apart that the
+    gaps survive a 32-pixel favicon.
+  -->
+
+  <rect width="512" height="512" rx="112" fill="#1E2128"/>
+  <rect x="1.5" y="1.5" width="509" height="509" rx="110.5" fill="none" stroke="#343945" stroke-width="3"/>
+
+  <!-- Bottom instance, furthest back and dimmest. -->
+  <g transform="translate(256 261)">
+    <path d="M0 0 150 75 0 150-150 75Z" fill="#2E5C39"/>
+    <path d="M-150 75 0 150 0 186-150 111Z" fill="#24492D"/>
+    <path d="M150 75 0 150 0 186 150 111Z" fill="#1C3A24"/>
   </g>
-  <!-- A quiet accent bar, echoing the progress bar in the app. -->
-  <rect x="34" y="104" width="60" height="6" rx="3" fill="#5B8DEF"/>
+
+  <!-- Middle instance. -->
+  <g transform="translate(256 173)">
+    <path d="M0 0 150 75 0 150-150 75Z" fill="#3E7A4B"/>
+    <path d="M-150 75 0 150 0 186-150 111Z" fill="#2E5C39"/>
+    <path d="M150 75 0 150 0 186 150 111Z" fill="#24492D"/>
+  </g>
+
+  <!-- Top instance: the active one, in the accent the app uses for its
+       primary action. -->
+  <g transform="translate(256 85)">
+    <path d="M0 0 150 75 0 150-150 75Z" fill="#5B8DEF"/>
+    <path d="M-150 75 0 150 0 186-150 111Z" fill="#3F66B5"/>
+    <path d="M150 75 0 150 0 186 150 111Z" fill="#33507F"/>
+    <!-- A hairline along the top face, so the active block keeps its shape
+         against the dark ground at small sizes. -->
+    <path d="M0 0 150 75 0 150-150 75Z" fill="none" stroke="#8FB2F5" stroke-width="3" stroke-linejoin="round"/>
+  </g>
 </svg>

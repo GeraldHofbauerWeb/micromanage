@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="packaging/minecraft-instance-manager-plain.svg" alt="" width="132" height="132">
+</p>
+
 # Minecraft Instance Manager
 
 A Minecraft launcher and instance manager. Keep several setups side by side,

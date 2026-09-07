@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 384" width="384" height="384" role="img" aria-labelledby="title desc">
+  <title id="title">Minecraft Instance Manager</title>
+  <desc id="desc">Three stacked isometric blocks; the top one is highlighted as the active instance.</desc>
+
+  <!--
+    The mark without its tile, for places that bring their own background: a
+    README on either theme, a slide, a sticker. Same geometry as the app icon,
+    with the frame's padding removed so the blocks fill the box.
+
+    The hairline that keeps the active block readable on the dark tile is kept
+    here too, because on a light background the blue block otherwise loses its
+    top edge against the one below it.
+  -->
+
+  <!-- Bottom instance, furthest back and dimmest. -->
+  <g transform="translate(192 197)">
+    <path d="M0 0 150 75 0 150-150 75Z" fill="#2E5C39"/>
+    <path d="M-150 75 0 150 0 186-150 111Z" fill="#24492D"/>
+    <path d="M150 75 0 150 0 186 150 111Z" fill="#1C3A24"/>
+  </g>
+
+  <!-- Middle instance. -->
+  <g transform="translate(192 109)">
+    <path d="M0 0 150 75 0 150-150 75Z" fill="#3E7A4B"/>
+    <path d="M-150 75 0 150 0 186-150 111Z" fill="#2E5C39"/>
+    <path d="M150 75 0 150 0 186 150 111Z" fill="#24492D"/>
+  </g>
+
+  <!-- Top instance: the active one, in the accent the app uses for its
+       primary action. -->
+  <g transform="translate(192 21)">
+    <path d="M0 0 150 75 0 150-150 75Z" fill="#5B8DEF"/>
+    <path d="M-150 75 0 150 0 186-150 111Z" fill="#3F66B5"/>
+    <path d="M150 75 0 150 0 186 150 111Z" fill="#33507F"/>
+    <path d="M0 0 150 75 0 150-150 75Z" fill="none" stroke="#8FB2F5" stroke-width="3" stroke-linejoin="round"/>
+  </g>
+</svg>
