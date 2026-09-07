@@ -58,6 +58,12 @@ var (
 	ErrXboxUnavailable = errors.New("Xbox Live is not available in this account's country")
 	// ErrNoGame means the account does not own the game.
 	ErrNoGame = errors.New("this account does not own Minecraft: Java Edition")
+	// ErrAppNotApproved means Mojang has not allow-listed the application id.
+	// Since the review process was introduced, a new registration reaches every
+	// service in the chain and is only refused at the last one.
+	ErrAppNotApproved = errors.New(
+		"this application id is not on Mojang's allow list for the Minecraft services API; " +
+			"request access at https://aka.ms/mce-reviewappid")
 	// ErrReauth means the stored refresh token is no longer accepted, so the
 	// player has to sign in interactively again.
 	ErrReauth = errors.New("the Microsoft session expired; sign in again")
@@ -430,6 +436,12 @@ func (m *MSA) minecraftLogin(ctx context.Context, userHash, xstsToken string) (s
 		ExpiresIn   int    `json:"expires_in"`
 	}
 	if err := m.postJSON(ctx, m.Endpoints.MCLogin, "", body, &resp); err != nil {
+		// A registration Mojang has not reviewed fails here and nowhere
+		// earlier, so the raw body is the only thing that names the cause.
+		var httpErr *httpError
+		if errors.As(err, &httpErr) && strings.Contains(httpErr.Body, "Invalid app registration") {
+			return "", 0, ErrAppNotApproved
+		}
 		return "", 0, err
 	}
 	if resp.AccessToken == "" {

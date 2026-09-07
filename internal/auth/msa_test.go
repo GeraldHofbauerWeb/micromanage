@@ -30,6 +30,9 @@ type msaStub struct {
 	profileStatus int
 	profileBody   string
 
+	mcLoginStatus int
+	mcLoginBody   string
+
 	refreshError string
 
 	// polls counts token requests, to prove polling actually happened.
@@ -118,6 +121,12 @@ func newMSAStub(t *testing.T) (*MSA, *msaStub) {
 	})
 
 	mux.HandleFunc("/mclogin", func(w http.ResponseWriter, r *http.Request) {
+		if stub.mcLoginStatus != 0 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(stub.mcLoginStatus)
+			_, _ = w.Write([]byte(stub.mcLoginBody))
+			return
+		}
 		var body struct {
 			IdentityToken string `json:"identityToken"`
 		}
@@ -318,6 +327,18 @@ func TestMSASignInMapsXSTSRefusals(t *testing.T) {
 				t.Fatalf("err = %v, want %v", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestMSASignInReportsAnUnapprovedApplication(t *testing.T) {
+	client, stub := newMSAStub(t)
+	stub.mcLoginStatus = http.StatusForbidden
+	stub.mcLoginBody = `{"path":"/authentication/login_with_xbox",` +
+		`"errorMessage":"Invalid app registration, see https://aka.ms/AppRegInfo for more information"}`
+
+	_, err := client.SignIn(context.Background(), Tokens{Access: "MS-ACCESS"})
+	if !errors.Is(err, ErrAppNotApproved) {
+		t.Fatalf("err = %v, want ErrAppNotApproved", err)
 	}
 }
 

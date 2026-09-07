@@ -152,8 +152,11 @@ It requires your own Azure application:
    device code flow does not use one.
 2. Under *Authentication → Advanced settings*, turn on *Allow public client
    flows*. Without it the device code request is refused.
-3. Microsoft asks third-party launchers to apply for access to the Minecraft
-   services API. An unapproved id can be rejected at the sign-in endpoint.
+3. Request access to the Java Edition game service API at
+   https://aka.ms/mce-reviewappid. Mojang reviews new application ids by hand
+   and adds them to an allow list; until yours is on it, sign-in runs the whole
+   chain and is refused at the last step with *Invalid app registration*.
+   Launchers registered before the review process started keep their access.
 
 Supply the id at build time (`make MSA_CLIENT_ID=<uuid>`), through
 `MIM_MSA_CLIENT_ID`, or with `config msa-client-id <uuid>` — in that order of
