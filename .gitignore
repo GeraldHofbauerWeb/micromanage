@@ -20,9 +20,12 @@ test-instances/
 # Personal configuration
 personal-config/
 
-# Go build artifacts
-minecraft-instance-manager
-minecraft-instance-manager.exe
+# Go build artifacts. Anchored to the repository root on purpose: unanchored,
+# the pattern also matched cmd/minecraft-instance-manager/, and every file
+# added there after this line was written was silently ignored.
+/minecraft-instance-manager
+/minecraft-instance-manager.exe
+/minecraft-instance-manager-gui
 dist/
 *.log
 
