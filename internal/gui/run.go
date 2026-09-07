@@ -2,6 +2,7 @@ package gui
 
 import (
 	"os"
+	"strings"
 	"time"
 
 	"gioui.org/app"
@@ -25,6 +26,11 @@ const invalidateInterval = 30 * time.Millisecond
 type Options struct {
 	Version    string
 	LauncherID string
+	// MSAClientID is the Azure application id Microsoft sign-in runs against.
+	// It is resolved at startup from, in order, the MIM_MSA_CLIENT_ID
+	// environment variable, the manager configuration, and the id compiled
+	// into the build — so a fork or a test build needs no recompile.
+	MSAClientID string
 }
 
 // Run opens the launcher window and blocks until it closes.
@@ -42,6 +48,8 @@ func Run(opts Options) error {
 	store := launcher.NewStore()
 	ctrl := launcher.NewController(manager, store, accounts, opts.Version)
 	ctrl.LauncherID = opts.LauncherID
+	ctrl.MSAClientID = resolveMSAClientID(opts.MSAClientID, manager)
+	store.SetMSAConfigured(ctrl.MSAConfigured())
 
 	w := new(app.Window)
 	w.Option(
@@ -66,6 +74,21 @@ func Run(opts Options) error {
 			e.Frame(gtx.Ops)
 		}
 	}
+}
+
+// resolveMSAClientID picks the Azure application id to sign in with.
+//
+// The environment wins so a player can try a different registration without a
+// rebuild, then the saved configuration, then whatever the build was stamped
+// with.
+func resolveMSAClientID(compiledIn string, manager *instance.Manager) string {
+	if id := strings.TrimSpace(os.Getenv("MIM_MSA_CLIENT_ID")); id != "" {
+		return id
+	}
+	if id := strings.TrimSpace(manager.GetConfig()["msa-client-id"]); id != "" {
+		return id
+	}
+	return strings.TrimSpace(compiledIn)
 }
 
 // pump drains controller events into the store and coalesces repaints.

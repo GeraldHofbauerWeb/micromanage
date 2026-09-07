@@ -39,7 +39,24 @@ const (
 	TaskDelete  TaskKind = "delete"
 	TaskHarvest TaskKind = "harvest"
 	TaskDetect  TaskKind = "detect"
+	TaskLogin   TaskKind = "login"
 )
+
+// LoginState is an interactive Microsoft sign-in in progress.
+//
+// The device code flow makes the wait visible on purpose: the player has to
+// read a code off this screen and type it into a browser, so the UI needs the
+// code, where to enter it, and how long it stays valid.
+type LoginState struct {
+	Active          bool
+	Task            TaskID
+	UserCode        string
+	VerificationURI string
+	ExpiresAt       time.Time
+	// Step names the stage of the chain currently running, so the wait after
+	// the browser part says what it is doing.
+	Step string
+}
 
 // Task is the observable state of a background operation.
 type Task struct {
@@ -91,8 +108,13 @@ type Snapshot struct {
 	Runtimes []java.Runtime
 	Config   map[string]string
 
-	Task Task
-	Game GameState
+	Task  Task
+	Game  GameState
+	Login LoginState
+
+	// MSAConfigured reports whether this build can offer Microsoft sign-in at
+	// all; without an Azure application id it can only make local accounts.
+	MSAConfigured bool
 
 	Status string
 	Err    error
@@ -123,8 +145,11 @@ type Store struct {
 	runtimes []java.Runtime
 	config   map[string]string
 
-	task Task
-	game GameState
+	task  Task
+	game  GameState
+	login LoginState
+
+	msaConfigured bool
 
 	status      string
 	err         error
@@ -159,6 +184,8 @@ func (s *Store) Snapshot() Snapshot {
 		Config:         make(map[string]string, len(s.config)),
 		Task:           s.task,
 		Game:           s.game,
+		Login:          s.login,
+		MSAConfigured:  s.msaConfigured,
 		Status:         s.status,
 		Err:            s.err,
 		Reclaimable:    make(map[string]int64, len(s.reclaimable)),
@@ -235,6 +262,31 @@ func (s *Store) SetAccounts(list []auth.Account, active string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.accounts, s.activeAcct = list, active
+}
+
+// SetLogin publishes the state of an interactive sign-in.
+func (s *Store) SetLogin(login LoginState) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.login = login
+}
+
+// UpdateLogin changes the sign-in in flight, ignoring an update from one that
+// has already been superseded or cancelled.
+func (s *Store) UpdateLogin(id TaskID, apply func(*LoginState)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.login.Active || s.login.Task != id {
+		return
+	}
+	apply(&s.login)
+}
+
+// SetMSAConfigured records whether Microsoft sign-in is available.
+func (s *Store) SetMSAConfigured(ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.msaConfigured = ok
 }
 
 func (s *Store) SetRuntimes(list []java.Runtime) {

@@ -23,7 +23,8 @@ func main() {
 	flag.Parse()
 
 	gui.RunMain(gui.Options{
-		Version:    Version,
-		LauncherID: defaultMSAClientID,
+		Version:     Version,
+		LauncherID:  defaultMSAClientID,
+		MSAClientID: defaultMSAClientID,
 	})
 }

@@ -54,8 +54,11 @@ static binary for every platform, the GUI is built per platform.
 
 Run `minecraft-launcher`, or start it from the application menu.
 
-1. **Sign in.** Microsoft accounts need an Azure application id (see below); a
-   local account plays single-player in full and is offered by default.
+1. **Sign in.** *Sign in with Microsoft* shows a code to enter at
+   microsoft.com/link; the launcher waits, then stores the account and renews
+   its session on its own. It needs an Azure application id (see below). A
+   local account plays single-player in full but is rejected by servers running
+   in online mode.
 2. **Pick an instance**, or create one. New instances are empty and instant;
    cloning an existing one is an explicit choice.
 3. **Pick the system** — Vanilla or a mod loader. It defaults to the instance's
@@ -79,7 +82,10 @@ also how it is tested.
 | `restore` | Put the original `.minecraft` back |
 | `instance detect [--all] [--write]` | Work out what an instance runs |
 | `instance show <name>` / `instance set <name> <key> <value>` | Read and change settings |
-| `launch <name> --offline <player>` | Launch, with `--dry-run` to print the command line |
+| `launch <name>` | Launch as the signed-in account; `--offline <player>` overrides it, `--dry-run` prints the command line |
+| `account login` | Sign in with a Microsoft account, by code |
+| `account list` / `account use <name>` / `account remove <name>` | See and choose the account that launches |
+| `account offline <name>` | Add a local account |
 | `java list` | Every Java runtime found, including those inside instances |
 | `verify [--version <id>]` | Download and check everything a version needs |
 | `migrate [--dry-run]` | Build the shared store from the instances |
@@ -128,17 +134,34 @@ unconfigured; nothing is written until you save settings or launch. Run
 
 ## Microsoft sign-in
 
-Signing in with a Microsoft account requires your own Azure application:
+Sign-in uses the OAuth device code flow: the launcher shows a code, you enter it
+in a browser, and it polls until you are done. Nothing listens on a local port
+and there is no client secret — a device code client is a public client, so its
+application id is not a credential and can live in the source.
 
-1. Register an application at portal.azure.com — account type *Personal
-   Microsoft accounts only*, platform *Mobile and desktop applications*,
-   redirect `http://localhost`, public client flows enabled.
-2. Request access to the Minecraft launcher API from Microsoft. Until that is
-   approved, the sign-in endpoint refuses the client id.
+From there the token is exchanged along the chain the game requires: Xbox Live,
+then XSTS, then Minecraft services, then the player profile. Each step is
+reported separately, because each refuses for its own reason — an account with
+no Xbox profile, a child account outside a family, or one that does not own the
+game are all different problems with different fixes.
+
+It requires your own Azure application:
+
+1. Register an application at portal.azure.com — *New registration*, account
+   type *Personal Microsoft accounts only*. Leave the redirect URI empty; the
+   device code flow does not use one.
+2. Under *Authentication → Advanced settings*, turn on *Allow public client
+   flows*. Without it the device code request is refused.
+3. Microsoft asks third-party launchers to apply for access to the Minecraft
+   services API. An unapproved id can be rejected at the sign-in endpoint.
 
 Supply the id at build time (`make MSA_CLIENT_ID=<uuid>`), through
-`MIM_MSA_CLIENT_ID`, or with `config msa-client-id <uuid>`. Without one, only
-local accounts are offered.
+`MIM_MSA_CLIENT_ID`, or with `config msa-client-id <uuid>` — in that order of
+precedence, environment first. Without one, only local accounts are offered.
+
+The Minecraft session lasts about a day. It is renewed from the stored refresh
+token at the next launch, and only when that is refused does the account ask to
+sign in again.
 
 **On credentials:** accounts are stored in
 `~/.config/minecraft-instance/accounts.json` with mode 0600. The file is not

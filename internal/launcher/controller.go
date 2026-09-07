@@ -2,6 +2,7 @@ package launcher
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -26,6 +27,12 @@ type (
 	ActionSelect struct{ Name string }
 	// ActionLoginOffline adds and activates a local account.
 	ActionLoginOffline struct{ Name string }
+	// ActionLoginMicrosoft signs in with a Microsoft account through the
+	// device code flow. It stays in flight until the player finishes in their
+	// browser, so cancelling it is a normal outcome rather than an error.
+	ActionLoginMicrosoft struct{}
+	// ActionSignOut forgets an account and its stored tokens.
+	ActionSignOut struct{ UUID string }
 	// ActionCreate makes a new instance.
 	ActionCreate struct {
 		Name    string
@@ -68,6 +75,8 @@ type (
 func (ActionRefresh) isAction()           {}
 func (ActionSelect) isAction()            {}
 func (ActionLoginOffline) isAction()      {}
+func (ActionLoginMicrosoft) isAction()    {}
+func (ActionSignOut) isAction()           {}
 func (ActionCreate) isAction()            {}
 func (ActionDelete) isAction()            {}
 func (ActionSaveMeta) isAction()          {}
@@ -99,7 +108,12 @@ type Controller struct {
 	Layout     *launch.Layout
 	Accounts   *AccountStore
 	LauncherID string
-	Version    string
+	// MSAClientID is the Azure application id Microsoft sign-in runs against.
+	// Empty leaves the launcher able to make local accounts only.
+	MSAClientID string
+	// MSAEndpoints overrides the sign-in services, which only a test does.
+	MSAEndpoints auth.Endpoints
+	Version      string
 
 	store  *Store
 	events chan Event
@@ -213,6 +227,10 @@ func (c *Controller) run(ctx context.Context, id TaskID, a Action) {
 		c.doSelect(action.Name)
 	case ActionLoginOffline:
 		c.doLoginOffline(action.Name)
+	case ActionLoginMicrosoft:
+		c.doLoginMicrosoft(ctx, id)
+	case ActionSignOut:
+		c.doSignOut(action.UUID)
 	case ActionCreate:
 		c.doCreate(ctx, id, action)
 	case ActionDelete:
@@ -262,6 +280,7 @@ func (c *Controller) doRefresh(ctx context.Context) {
 		s.SetRuntimes(runtimes)
 		s.SetAccounts(accounts, active)
 		s.SetConfig(config)
+		s.SetMSAConfigured(c.MSAConfigured())
 
 		// Land on the login screen only when there is genuinely no account.
 		if len(accounts) == 0 {
@@ -296,6 +315,158 @@ func (c *Controller) doLoginOffline(name string) {
 		s.SetScreen(ScreenInstances)
 		s.SetStatus("Signed in as " + account.Name)
 	}})
+}
+
+// MSAConfigured reports whether Microsoft sign-in can be offered.
+func (c *Controller) MSAConfigured() bool { return c.MSAClientID != "" }
+
+// msa builds a sign-in client whose progress is reported against one task.
+func (c *Controller) msa(id TaskID) *auth.MSA {
+	client := auth.NewMSA(c.MSAClientID)
+	if c.MSAEndpoints.Token != "" {
+		client.Endpoints = c.MSAEndpoints
+	}
+	client.Observer = func(step string) {
+		c.emit(Event{Terminal: true, Apply: func(s *Store) {
+			s.UpdateLogin(id, func(l *LoginState) { l.Step = step })
+			s.UpdateTask(id, func(t *Task) { t.Message = step })
+		}})
+	}
+	return client
+}
+
+// doLoginMicrosoft runs the device code flow from the code to a stored
+// account, publishing the code as soon as there is one to show.
+func (c *Controller) doLoginMicrosoft(ctx context.Context, id TaskID) {
+	client := c.msa(id)
+	if !client.Configured() {
+		c.fail(auth.ErrNotConfigured)
+		return
+	}
+
+	c.beginTask(id, TaskLogin, "Signing in with Microsoft")
+
+	code, err := client.StartDeviceCode(ctx)
+	if err != nil {
+		c.endLogin(id, err)
+		return
+	}
+
+	c.emit(Event{Terminal: true, Apply: func(s *Store) {
+		s.SetLogin(LoginState{
+			Active:          true,
+			Task:            id,
+			UserCode:        code.UserCode,
+			VerificationURI: code.VerificationURI,
+			ExpiresAt:       code.ExpiresAt,
+			Step:            "Waiting for you to enter the code",
+		})
+		s.SetScreen(ScreenLogin)
+	}})
+
+	tokens, err := client.WaitForToken(ctx, code)
+	if err != nil {
+		c.endLogin(id, err)
+		return
+	}
+
+	account, err := client.SignIn(ctx, tokens)
+	if err != nil {
+		c.endLogin(id, err)
+		return
+	}
+	if err := c.Accounts.Add(account); err != nil {
+		c.endLogin(id, err)
+		return
+	}
+
+	accounts, active := c.Accounts.List()
+	c.emit(Event{Terminal: true, Apply: func(s *Store) {
+		s.SetLogin(LoginState{})
+		s.SetAccounts(accounts, active)
+		s.SetScreen(ScreenInstances)
+		s.SetStatus("Signed in as " + account.Name)
+	}})
+	c.finishTask(id, nil)
+}
+
+// endLogin clears a sign-in that did not produce an account. A cancelled one
+// is the player changing their mind, not a failure, so it reports no error.
+func (c *Controller) endLogin(id TaskID, err error) {
+	cancelled := errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+
+	c.emit(Event{Terminal: true, Apply: func(s *Store) {
+		s.SetLogin(LoginState{})
+		if cancelled {
+			s.SetStatus("Sign-in cancelled")
+		}
+	}})
+
+	if cancelled {
+		c.emit(Event{Terminal: true, Apply: func(s *Store) {
+			s.UpdateTask(id, func(t *Task) { t.Done = true })
+		}})
+		return
+	}
+	c.finishTask(id, err)
+}
+
+// doSignOut forgets an account, so a wrong or expired one can be replaced.
+func (c *Controller) doSignOut(uuid string) {
+	if err := c.Accounts.Remove(uuid); err != nil {
+		c.fail(err)
+		return
+	}
+
+	accounts, active := c.Accounts.List()
+	c.emit(Event{Terminal: true, Apply: func(s *Store) {
+		s.SetAccounts(accounts, active)
+		s.SetStatus("Signed out")
+		if len(accounts) == 0 {
+			s.SetScreen(ScreenLogin)
+		}
+	}})
+}
+
+// ensureSession renews an expired Microsoft session before it is launched
+// with. Tokens last a day, so without this every launch on the second day
+// would fail inside the game rather than in the launcher.
+func (c *Controller) ensureSession(ctx context.Context, id TaskID, account auth.Account) (auth.Account, error) {
+	if account.Kind != auth.KindMSA || account.Usable() {
+		return account, nil
+	}
+
+	client := c.msa(id)
+	if !client.Configured() {
+		return account, auth.ErrNotConfigured
+	}
+
+	c.step(id, "Renewing the Microsoft session")
+	fresh, err := client.RefreshAccount(ctx, account)
+	if err != nil {
+		if errors.Is(err, auth.ErrReauth) {
+			// Mark it so the sign-in screen can say which account went stale
+			// instead of failing again at the next launch.
+			if markErr := c.Accounts.MarkNeedsReauth(account.UUID); markErr != nil {
+				return account, markErr
+			}
+			accounts, active := c.Accounts.List()
+			c.emit(Event{Terminal: true, Apply: func(s *Store) {
+				s.SetAccounts(accounts, active)
+			}})
+			return account, fmt.Errorf("%s has to sign in with Microsoft again: %w", account.Name, err)
+		}
+		return account, err
+	}
+
+	if err := c.Accounts.Add(fresh); err != nil {
+		return account, err
+	}
+	accounts, active := c.Accounts.List()
+	c.emit(Event{Terminal: true, Apply: func(s *Store) {
+		s.SetAccounts(accounts, active)
+	}})
+	return fresh, nil
 }
 
 func (c *Controller) doCreate(ctx context.Context, id TaskID, a ActionCreate) {
@@ -468,6 +639,11 @@ func (c *Controller) doLaunch(ctx context.Context, id TaskID, name string) {
 	account, ok := c.Accounts.Active()
 	if !ok {
 		c.finishTask(id, fmt.Errorf("no account selected"))
+		return
+	}
+	account, err := c.ensureSession(ctx, id, account)
+	if err != nil {
+		c.finishTask(id, err)
 		return
 	}
 

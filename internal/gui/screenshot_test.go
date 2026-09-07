@@ -95,6 +95,24 @@ func TestRenderScreens(t *testing.T) {
 
 	login := demoSnapshot()
 	login.Screen = launcher.ScreenLogin
+	login.MSAConfigured = true
+
+	// The two states a first sign-in passes through: the choice, and the code
+	// the player has to carry to a browser.
+	firstRun := login
+	firstRun.Accounts = nil
+	firstRun.Active = auth.Account{}
+	firstRun.HasAccount = false
+
+	deviceCode := firstRun
+	deviceCode.Login = launcher.LoginState{
+		Active:          true,
+		Task:            2,
+		UserCode:        "K7QM-HZ4T",
+		VerificationURI: "https://www.microsoft.com/link",
+		ExpiresAt:       time.Now().Add(13*time.Minute + 20*time.Second),
+		Step:            "Waiting for you to enter the code",
+	}
 
 	settings := demoSnapshot()
 	settings.Screen = launcher.ScreenSettings
@@ -112,6 +130,8 @@ func TestRenderScreens(t *testing.T) {
 		{"launching", launching},
 		{"running", running},
 		{"login", login},
+		{"login-first-run", firstRun},
+		{"login-device-code", deviceCode},
 		{"settings", settings},
 	}
 

@@ -170,7 +170,7 @@ func TestCanDeleteRejectsActiveInstance(t *testing.T) {
 
 func TestConfigKeysAreOrderedAndEditableFlagged(t *testing.T) {
 	keys := ConfigKeys()
-	want := []string{"minecraft-path", "instances-path", "backup-path", "app-dir", "config-file"}
+	want := []string{"minecraft-path", "instances-path", "backup-path", "msa-client-id", "app-dir", "config-file"}
 	if len(keys) != len(want) {
 		t.Fatalf("got %d keys, want %d", len(keys), len(want))
 	}
@@ -187,7 +187,7 @@ func TestConfigKeysAreOrderedAndEditableFlagged(t *testing.T) {
 			t.Errorf("%q reported as editable, but UpdateConfig rejects it", k)
 		}
 	}
-	for _, k := range []string{"minecraft-path", "instances-path", "backup-path"} {
+	for _, k := range []string{"minecraft-path", "instances-path", "backup-path", "msa-client-id"} {
 		if !IsEditableConfigKey(k) {
 			t.Errorf("%q reported as read-only, but UpdateConfig accepts it", k)
 		}

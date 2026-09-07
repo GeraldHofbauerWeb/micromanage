@@ -23,6 +23,10 @@ type Config struct {
 	InstancesPath string `json:"instances_path"`
 	MinecraftPath string `json:"minecraft_path"`
 	BackupPath    string `json:"backup_path"`
+	// MSAClientID is the Azure application id Microsoft sign-in runs against.
+	// It lives here rather than only in the binary so a player can point the
+	// launcher at their own registration without rebuilding it.
+	MSAClientID string `json:"msa_client_id,omitempty"`
 }
 
 type Manager struct {
@@ -32,6 +36,7 @@ type Manager struct {
 	InstancesPath string
 	MinecraftPath string
 	BackupPath    string
+	MSAClientID   string
 	cfg           Config
 }
 
@@ -118,6 +123,7 @@ func NewManager() (*Manager, error) {
 		m.InstancesPath = m.cfg.InstancesPath
 		m.MinecraftPath = m.cfg.MinecraftPath
 		m.BackupPath = m.cfg.BackupPath
+		m.MSAClientID = m.cfg.MSAClientID
 		// ensure instances dir exists
 		if err := os.MkdirAll(m.InstancesPath, 0755); err != nil {
 			return nil, fmt.Errorf("failed to create instances dir from config: %w", err)
@@ -166,6 +172,7 @@ func (m *Manager) saveConfig() error {
 	m.cfg.InstancesPath = m.InstancesPath
 	m.cfg.MinecraftPath = m.MinecraftPath
 	m.cfg.BackupPath = m.BackupPath
+	m.cfg.MSAClientID = m.MSAClientID
 
 	data, err := json.MarshalIndent(m.cfg, "", "  ")
 	if err != nil {
@@ -226,8 +233,16 @@ func getDefaultMinecraftPath() (string, error) {
 }
 
 // UpdateConfig updates one of the supported config keys and persists the file.
-// Supported keys: "minecraft-path", "instances-path", "backup-path"
+// Supported keys: "minecraft-path", "instances-path", "backup-path",
+// "msa-client-id"
 func (m *Manager) UpdateConfig(key, value string) error {
+	// An application id is not a path, so it is set before the expansion the
+	// path keys need.
+	if key == "msa-client-id" {
+		m.MSAClientID = strings.TrimSpace(value)
+		return m.saveConfig()
+	}
+
 	value = expandPath(value)
 	switch key {
 	case "minecraft-path", "minecraft-dir", "minecraft":
@@ -257,6 +272,7 @@ func (m *Manager) GetConfig() map[string]string {
 		"backup-path":    m.BackupPath,
 		"app-dir":        m.AppDir,
 		"config-file":    m.ConfigFile,
+		"msa-client-id":  m.MSAClientID,
 	}
 }
 

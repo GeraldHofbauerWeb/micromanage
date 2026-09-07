@@ -35,6 +35,12 @@ func ConfigKeys() []ConfigKey {
 			Editable:    true,
 		},
 		{
+			Key:         "msa-client-id",
+			Label:       "Microsoft application id",
+			Description: "The Azure application id Microsoft sign-in runs against. Empty leaves local accounts as the only option.",
+			Editable:    true,
+		},
+		{
 			Key:         "app-dir",
 			Label:       "Application directory",
 			Description: "Derived from the OS config directory.",

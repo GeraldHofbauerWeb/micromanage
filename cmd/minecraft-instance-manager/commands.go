@@ -325,6 +325,7 @@ Examples:
   config minecraft-path
   config minecraft-path /home/user/.minecraft
   config instances-path /path/to/instances
+  config msa-client-id 00000000-0000-0000-0000-000000000000
 `,
 	Args:          cobra.RangeArgs(1, 2),
 	SilenceErrors: true,
@@ -386,6 +387,8 @@ func normalizeConfigKey(key string) string {
 		return "instances-path"
 	case "backup", "backup-dir":
 		return "backup-path"
+	case "msa", "client-id", "msa-client":
+		return "msa-client-id"
 	}
 	return key
 }

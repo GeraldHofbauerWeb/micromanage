@@ -140,6 +140,25 @@ func (s *AccountStore) Add(account auth.Account) error {
 	return s.save()
 }
 
+// MarkNeedsReauth records that an account's Microsoft session was rejected,
+// so the UI can ask for a fresh sign-in instead of failing at the next launch.
+func (s *AccountStore) MarkNeedsReauth(uuid string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, a := range s.accounts {
+		if a.UUID == uuid {
+			s.accounts[i].NeedsReauth = true
+			// The refresh token was refused; keeping it would only invite
+			// another doomed attempt.
+			s.accounts[i].MSRefreshToken = ""
+			s.accounts[i].MCAccessToken = ""
+			return s.save()
+		}
+	}
+	return fmt.Errorf("no account with id %q", uuid)
+}
+
 // SetActive chooses which account launches.
 func (s *AccountStore) SetActive(uuid string) error {
 	s.mu.Lock()
