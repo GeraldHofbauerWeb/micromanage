@@ -9,8 +9,11 @@ MSA_CLIENT_ID ?=
 
 CLI_BIN  := minecraft-instance-manager
 GUI_BIN  := minecraft-instance-manager-gui
-# The GUI is installed under a name that reads sensibly in an application menu.
-DESKTOP_BIN := minecraft-launcher
+# LEGACY_BIN is the name the GUI used to be installed under as well. Mojang's
+# own package owns that name in /usr/bin, and ~/.local/bin comes first on PATH,
+# so the copy shadowed the official launcher for anyone typing it in a shell.
+# Nothing installs it any more; uninstall still removes it.
+LEGACY_BIN := minecraft-launcher
 
 PREFIX      ?= $(HOME)/.local
 BINDIR      := $(PREFIX)/bin
@@ -52,7 +55,7 @@ gui:
 install: build install-desktop
 	@install -Dm755 dist/$(CLI_BIN) $(BINDIR)/$(CLI_BIN)
 	@install -Dm755 dist/$(GUI_BIN) $(BINDIR)/$(GUI_BIN)
-	@install -Dm755 dist/$(GUI_BIN) $(BINDIR)/$(DESKTOP_BIN)
+	@rm -f $(BINDIR)/$(LEGACY_BIN)
 	@echo "  installed to $(BINDIR)"
 
 install-desktop:
@@ -65,7 +68,7 @@ install-desktop:
 	@echo "  registered $(DESKTOP_ID).desktop"
 
 uninstall:
-	@rm -f $(BINDIR)/$(CLI_BIN) $(BINDIR)/$(GUI_BIN) $(BINDIR)/$(DESKTOP_BIN)
+	@rm -f $(BINDIR)/$(CLI_BIN) $(BINDIR)/$(GUI_BIN) $(BINDIR)/$(LEGACY_BIN)
 	@rm -f $(APPDIR)/$(DESKTOP_ID).desktop
 	@rm -f $(ICONDIR)/scalable/apps/$(DESKTOP_ID).svg
 	@update-desktop-database $(APPDIR) 2>/dev/null || true
