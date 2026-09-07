@@ -3,6 +3,7 @@ package launcher
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -220,6 +221,21 @@ func TestMicrosoftSignInPublishesTheCodeThenTheAccount(t *testing.T) {
 	stored, ok := reloaded.Active()
 	if !ok || stored.MCAccessToken != "MC-TOKEN" || stored.MSRefreshToken != "MS-REFRESH" {
 		t.Errorf("stored account = %+v, ok = %v", stored, ok)
+	}
+}
+
+func TestMicrosoftSignInClearsTheErrorFromTheLastAttempt(t *testing.T) {
+	stub := newSignInStub(t)
+	ctrl := newTestController(t, stub)
+
+	// What a refused application id, or any other failure, leaves behind.
+	ctrl.Store().SetError(errors.New("this application id is not on the allow list"))
+
+	ctrl.Dispatch(ActionLoginMicrosoft{})
+
+	snap := waitFor(t, ctrl, "the device code", func(s Snapshot) bool { return s.Login.Active })
+	if snap.Err != nil {
+		t.Errorf("the previous failure is still in the banner: %v", snap.Err)
 	}
 }
 

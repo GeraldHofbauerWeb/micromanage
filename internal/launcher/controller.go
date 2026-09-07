@@ -346,6 +346,11 @@ func (c *Controller) doLoginMicrosoft(ctx context.Context, id TaskID) {
 
 	c.beginTask(id, TaskLogin, "Signing in with Microsoft")
 
+	// A refusal from the last attempt would otherwise sit in the banner for
+	// the whole of this one, which reads as the new attempt having failed
+	// before it even asked for a code.
+	c.setStatus("Signing in with Microsoft")
+
 	code, err := client.StartDeviceCode(ctx)
 	if err != nil {
 		c.endLogin(id, err)
