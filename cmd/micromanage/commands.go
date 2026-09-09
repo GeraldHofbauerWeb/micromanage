@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
 	"github.com/spf13/cobra"
 )
 
@@ -396,7 +396,7 @@ func normalizeConfigKey(key string) string {
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show version information",
-	Long:  `Display the current version of the Minecraft Instance Manager.`,
+	Long:  `Display the current version of MicroManage.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Printf("%s %s\n", AppName, Version)
 		fmt.Printf("Platform: %s/%s\n", runtime.GOOS, runtime.GOARCH)

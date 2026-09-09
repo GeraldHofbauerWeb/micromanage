@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
 	"github.com/spf13/cobra"
 )
 

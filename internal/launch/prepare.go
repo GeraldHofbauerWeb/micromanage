@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/download"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/mojang"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/download"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/mojang"
 )
 
 // Phase names the stage a preparation is in, so a UI can show progress per

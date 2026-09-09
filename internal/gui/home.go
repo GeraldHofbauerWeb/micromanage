@@ -14,8 +14,8 @@ import (
 	"gioui.org/widget"
 	"gioui.org/widget/material"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launcher"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/launcher"
 )
 
 // railWidth is the instance list's width. Wide enough for a long pack name
@@ -418,7 +418,7 @@ func (w *workbench) layoutEmpty(gtx layout.Context, u *ui, snap launcher.Snapsho
 			rigid(func(gtx layout.Context) layout.Dimensions { return mark(gtx, markSize) }),
 			spacer(heroGap),
 			rigid(func(gtx layout.Context) layout.Dimensions {
-				l := material.Label(th.Theme, unit.Sp(32), "Instance Manager")
+				l := material.Label(th.Theme, unit.Sp(32), "MicroManage")
 				l.Font.Typeface = faceDisplay
 				l.Font.Weight = font.Bold
 				l.Color = th.P.Text

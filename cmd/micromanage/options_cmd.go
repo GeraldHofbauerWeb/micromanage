@@ -7,9 +7,9 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/desktop"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launch"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/desktop"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/launch"
 	"github.com/spf13/cobra"
 )
 

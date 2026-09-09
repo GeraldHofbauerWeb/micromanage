@@ -7,8 +7,8 @@ import (
 	"gioui.org/unit"
 	"gioui.org/widget"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launcher"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/launcher"
 )
 
 // dialogs holds the modal states. At most one is open at a time.

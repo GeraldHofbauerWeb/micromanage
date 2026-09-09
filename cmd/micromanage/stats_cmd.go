@@ -7,7 +7,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
 	"github.com/spf13/cobra"
 )
 
@@ -132,6 +132,10 @@ func formatPlaytime(d time.Duration) string {
 	h := int(d.Hours())
 	m := int(d.Minutes()) % 60
 	switch {
+	case d < time.Minute:
+		// A launch that was closed again straight away; minutes would
+		// round it to nothing at all.
+		return fmt.Sprintf("%d s", int(d.Seconds()))
 	case h == 0:
 		return fmt.Sprintf("%d min", m)
 	case m == 0:

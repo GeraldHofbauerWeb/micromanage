@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/loader"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/loader"
 )
 
 // stubLoaderServices answers like Fabric's meta service.

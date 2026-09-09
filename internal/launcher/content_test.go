@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
 )
 
 // TestSelectListsContentAndTogglingRefreshesIt walks the path the workbench

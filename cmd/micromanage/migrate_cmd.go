@@ -6,7 +6,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launch"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/launch"
 	"github.com/spf13/cobra"
 )
 

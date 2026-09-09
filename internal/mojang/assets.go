@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/download"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/download"
 )
 
 // ResourcesURL is the CDN serving asset objects by digest.

@@ -1,4 +1,4 @@
-module github.com/GeraldHofbauerWeb/minecraft-instance-switcher
+module github.com/GeraldHofbauerWeb/micromanage
 
 go 1.25.1
 

@@ -21,7 +21,7 @@ import (
 const DefaultWorkers = 16
 
 // UserAgent identifies this launcher to the services it talks to.
-const UserAgent = "minecraft-instance-manager/2.0"
+const UserAgent = "micromanage/2.0"
 
 // Item is one file to fetch.
 type Item struct {

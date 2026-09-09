@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/mojang"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/mojang"
 )
 
 var testPlatform = mojang.Platform{OS: "linux", Arch: "x86_64", Version: "6.9.3"}
@@ -26,7 +26,7 @@ func testOptions() Options {
 	return Options{
 		Session:      testSession(),
 		GameDir:      "/home/gerry/.minecraft",
-		LauncherName: "minecraft-instance-manager",
+		LauncherName: "micromanage",
 		LauncherVer:  "2.0.0",
 		MinMB:        1024,
 		MaxMB:        8192,

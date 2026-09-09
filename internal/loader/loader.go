@@ -23,9 +23,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/download"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launch"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/download"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/launch"
 )
 
 // Endpoints are the services the loaders publish through. They are a struct

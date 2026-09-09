@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/auth"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/download"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/java"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launch"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launcher"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/auth"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/download"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/java"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/launch"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/launcher"
 	"github.com/spf13/cobra"
 )
 
@@ -120,7 +120,7 @@ shared store and downloaded if missing.`,
 				ClientID:    msaClientID(manager),
 			},
 			GameDir:         manager.MinecraftPath,
-			LauncherName:    "minecraft-instance-manager",
+			LauncherName:    "micromanage",
 			LauncherVer:     Version,
 			MinMB:           minMB,
 			MaxMB:           maxMB,

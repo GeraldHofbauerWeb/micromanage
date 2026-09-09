@@ -14,8 +14,8 @@ import (
 	"gioui.org/widget"
 	"gioui.org/widget/material"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/auth"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launcher"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/auth"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/launcher"
 )
 
 // loginScreen signs a player in, and lists who already is.

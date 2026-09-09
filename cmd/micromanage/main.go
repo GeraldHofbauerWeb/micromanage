@@ -15,20 +15,20 @@ import (
 // Version information
 const (
 	Version = "v2.0.0-dev"
-	AppName = "Minecraft Instance Manager"
+	AppName = "MicroManage"
 )
 
 // guiBinaryName is the companion GUI executable. It is a separate binary
 // because Gio requires cgo on Linux and macOS; keeping it out of this one lets
 // the CLI go on cross-compiling from a single host with CGO_ENABLED=0.
-var guiBinaryName = "minecraft-instance-manager-gui"
+var guiBinaryName = "micromanage-launcher"
 
 // defaultMSAClientID is injected at build time with
 // -ldflags "-X main.defaultMSAClientID=<uuid>".
 var defaultMSAClientID = ""
 
 var rootCmd = &cobra.Command{
-	Use:   "minecraft-instance-manager",
+	Use:   "micromanage",
 	Short: "A modern Minecraft instance manager and launcher",
 	Long: `A lightweight and efficient Minecraft instance manager that uses symlinks
 to instantly switch between different Minecraft setups without copying files.
@@ -89,7 +89,7 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	// Global flags
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.minecraft-instance-manager.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.micromanage.yaml)")
 	rootCmd.PersistentFlags().Bool("verbose", false, "verbose output")
 
 	viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
@@ -108,7 +108,7 @@ func initConfig() {
 
 		viper.AddConfigPath(home)
 		viper.SetConfigType("yaml")
-		viper.SetConfigName(".minecraft-instance-manager")
+		viper.SetConfigName(".micromanage")
 	}
 
 	viper.AutomaticEnv()

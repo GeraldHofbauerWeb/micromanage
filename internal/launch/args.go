@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/mojang"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/mojang"
 )
 
 // Session identifies the player a launch runs as.

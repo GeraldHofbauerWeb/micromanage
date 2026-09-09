@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
 )
 
 // TestOptionsSnapshotsFollowTheSelection walks the settings card: save the

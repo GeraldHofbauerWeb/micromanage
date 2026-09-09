@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/auth"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launcher"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/auth"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/launcher"
 	"github.com/spf13/cobra"
 )
 

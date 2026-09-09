@@ -10,9 +10,9 @@ import (
 	"gioui.org/unit"
 	"gioui.org/widget"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launch"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launcher"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/launch"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/launcher"
 )
 
 // instanceSettings is the workbench's last tab: what the instance runs and

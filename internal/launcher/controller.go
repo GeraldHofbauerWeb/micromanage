@@ -11,15 +11,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/auth"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/desktop"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/download"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/java"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launch"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/loader"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/mods"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/mojang"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/auth"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/desktop"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/download"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/java"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/launch"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/loader"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/mods"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/mojang"
 )
 
 // Action is a request from the UI. Every action is handled off the render
@@ -1251,7 +1251,7 @@ func (c *Controller) doLaunch(ctx context.Context, id TaskID, name string) {
 			ClientID:    c.LauncherID,
 		},
 		GameDir:       c.Manager.MinecraftPath,
-		LauncherName:  "minecraft-instance-manager",
+		LauncherName:  "micromanage",
 		LauncherVer:   c.Version,
 		MinMB:         minMB,
 		MaxMB:         maxMB,

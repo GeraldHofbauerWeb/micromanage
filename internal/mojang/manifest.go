@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/download"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/download"
 )
 
 // VersionManifestURL lists every published Minecraft version.

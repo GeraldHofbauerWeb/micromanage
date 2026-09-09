@@ -1,6 +1,6 @@
 # Usage Examples
 
-This document provides practical examples for common use cases of the Minecraft Instance Manager.
+This document provides practical examples for common use cases of MicroManage.
 
 ## 🎮 Gaming Scenarios
 
@@ -8,9 +8,9 @@ This document provides practical examples for common use cases of the Minecraft 
 
 ```bash
 # Set up different modpacks
-minecraft-instance-manager create skyfactory
-minecraft-instance-manager create stoneblock
-minecraft-instance-manager create enigmatica
+micromanage create skyfactory
+micromanage create stoneblock
+micromanage create enigmatica
 
 # Add mods to each
 cp SkyFactory-mods/* ~/.minecraft-instances/skyfactory/mods/
@@ -18,9 +18,9 @@ cp StoneBlock-mods/* ~/.minecraft-instances/stoneblock/mods/
 cp Enigmatica-mods/* ~/.minecraft-instances/enigmatica/mods/
 
 # Switch between them
-minecraft-instance-manager switch skyfactory
+micromanage switch skyfactory
 # Play Sky Factory...
-minecraft-instance-manager switch stoneblock
+micromanage switch stoneblock
 # Play Stone Block...
 ```
 
@@ -28,12 +28,12 @@ minecraft-instance-manager switch stoneblock
 
 ```bash
 # Different Minecraft versions
-minecraft-instance-manager create mc-1.19.4-forge
-minecraft-instance-manager create mc-1.20.1-forge
-minecraft-instance-manager create mc-1.21-neoforge
+micromanage create mc-1.19.4-forge
+micromanage create mc-1.20.1-forge
+micromanage create mc-1.21-neoforge
 
 # Switch based on what you want to play
-minecraft-instance-manager switch mc-1.20.1-forge
+micromanage switch mc-1.20.1-forge
 ```
 
 ## 🔧 Development Scenarios
@@ -42,18 +42,18 @@ minecraft-instance-manager switch mc-1.20.1-forge
 
 ```bash
 # Create development instances
-minecraft-instance-manager create clean-testing      # No other mods
-minecraft-instance-manager create compatibility-test # With common mods
-minecraft-instance-manager create performance-test   # With performance mods
+micromanage create clean-testing      # No other mods
+micromanage create compatibility-test # With common mods
+micromanage create performance-test   # With performance mods
 
 # Development cycle
-minecraft-instance-manager switch clean-testing
+micromanage switch clean-testing
 # Test your mod in isolation
 
-minecraft-instance-manager switch compatibility-test  
+micromanage switch compatibility-test  
 # Test with other popular mods
 
-minecraft-instance-manager switch performance-test
+micromanage switch performance-test
 # Check performance impact
 ```
 
@@ -61,9 +61,9 @@ minecraft-instance-manager switch performance-test
 
 ```bash
 # Test your mod across Minecraft versions
-minecraft-instance-manager create dev-1.20.1
-minecraft-instance-manager create dev-1.20.4
-minecraft-instance-manager create dev-1.21
+micromanage create dev-1.20.1
+micromanage create dev-1.20.4
+micromanage create dev-1.21
 
 # Add your mod to each and test
 cp my-mod-1.20.1.jar ~/.minecraft-instances/dev-1.20.1/mods/
@@ -77,8 +77,8 @@ cp my-mod-1.21.jar ~/.minecraft-instances/dev-1.21/mods/
 
 ```bash
 # Create base modpack
-minecraft-instance-manager create my-modpack-base
-minecraft-instance-manager switch my-modpack-base
+micromanage create my-modpack-base
+micromanage switch my-modpack-base
 
 # Add mods incrementally and test
 cp essential-mods/* ~/.minecraft/mods/
@@ -88,8 +88,8 @@ cp optional-mods/* ~/.minecraft/mods/
 # Test compatibility...
 
 # Create variants
-minecraft-instance-manager create my-modpack-lite
-minecraft-instance-manager create my-modpack-full
+micromanage create my-modpack-lite
+micromanage create my-modpack-full
 
 # Distribute the lite version
 tar -czf my-modpack-lite.tar.gz ~/.minecraft-instances/my-modpack-lite/
@@ -99,14 +99,14 @@ tar -czf my-modpack-lite.tar.gz ~/.minecraft-instances/my-modpack-lite/
 
 ```bash
 # Compare configurations
-minecraft-instance-manager create config-a
-minecraft-instance-manager create config-b
+micromanage create config-a
+micromanage create config-b
 
 # Test different mod configurations
-minecraft-instance-manager switch config-a
+micromanage switch config-a
 # Configure mods one way...
 
-minecraft-instance-manager switch config-b  
+micromanage switch config-b  
 # Configure mods differently...
 
 # Compare performance/stability
@@ -118,25 +118,25 @@ minecraft-instance-manager switch config-b
 
 ```bash
 # Before major changes, create backup
-minecraft-instance-manager create modpack-backup-$(date +%Y%m%d)
+micromanage create modpack-backup-$(date +%Y%m%d)
 
 # Copy current instance  
 cp -r ~/.minecraft-instances/my-modpack ~/.minecraft-instances/modpack-backup-$(date +%Y%m%d)/
 
 # Make changes safely
-minecraft-instance-manager switch my-modpack
+micromanage switch my-modpack
 # Add experimental mods...
 
 # If issues occur, restore backup
-minecraft-instance-manager switch modpack-backup-$(date +%Y%m%d)
+micromanage switch modpack-backup-$(date +%Y%m%d)
 ```
 
 ### Sharing with Friends
 
 ```bash
 # Prepare instance for sharing
-minecraft-instance-manager create friend-modpack
-minecraft-instance-manager switch friend-modpack
+micromanage create friend-modpack
+micromanage switch friend-modpack
 
 # Add mods and configure
 # Clean up personal data (remove saves, etc.)
@@ -154,15 +154,15 @@ tar -czf friend-modpack.tar.gz friend-modpack/
 
 ```bash
 # Sync with server modpack
-minecraft-instance-manager create server-sync
-minecraft-instance-manager switch server-sync
+micromanage create server-sync
+micromanage switch server-sync
 
 # Download server mods
 wget server.com/modpack-mods.zip
 unzip modpack-mods.zip -d ~/.minecraft/mods/
 
 # Keep in sync
-minecraft-instance-manager switch server-sync
+micromanage switch server-sync
 # Update mods as server updates...
 ```
 
@@ -172,16 +172,16 @@ minecraft-instance-manager switch server-sync
 
 ```bash
 # List all instances to see what you have
-minecraft-instance-manager list
+micromanage list
 
 # Switch to temporary instance before cleanup
-minecraft-instance-manager switch vanilla
+micromanage switch vanilla
 
 # Remove unused instances
 rm -rf ~/.minecraft-instances/old-instance-name
 
 # Restore if needed
-minecraft-instance-manager restore
+micromanage restore
 ```
 
 ### Regular Backups
@@ -205,10 +205,10 @@ ls -t ~/minecraft-backups/ | tail -n +5 | xargs -d '\n' -r rm -rf --
 ### Quick Instance Info
 ```bash
 # See mod counts
-minecraft-instance-manager list
+micromanage list
 
 # Check current instance
-minecraft-instance-manager list | grep "Current instance"
+micromanage list | grep "Current instance"
 ```
 
 ### Scripted Workflows
@@ -223,7 +223,7 @@ echo "Updating test instance..."
 cp build/libs/*.jar ~/.minecraft-instances/dev-test/mods/
 
 echo "Switching to test instance..."
-minecraft-instance-manager switch dev-test
+micromanage switch dev-test
 
 echo "Ready for testing!"
 ```
@@ -232,11 +232,11 @@ echo "Ready for testing!"
 ```bash
 # Always work on copies when experimenting
 cp -r ~/.minecraft-instances/stable ~/.minecraft-instances/experimental
-minecraft-instance-manager switch experimental
+micromanage switch experimental
 # Experiment safely...
 
 # Restore stable if needed
-minecraft-instance-manager switch stable
+micromanage switch stable
 ```
 
 ---

@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/auth"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/auth"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
 )
 
 // TestVersionIDForKeepsStoredIDForOwnLoader checks that the id detected from

@@ -11,9 +11,9 @@ import (
 	"gioui.org/widget"
 	"gioui.org/widget/material"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launch"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launcher"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/launch"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/launcher"
 )
 
 // overview is the workbench's first tab: one card per kind of content,
@@ -231,6 +231,10 @@ func formatPlaytime(d time.Duration) string {
 	h := int(d.Hours())
 	m := int(d.Minutes()) % 60
 	switch {
+	case d < time.Minute:
+		// A launch that was closed again straight away; minutes would
+		// round it to nothing at all.
+		return fmt.Sprintf("%d s", int(d.Seconds()))
 	case h == 0:
 		return fmt.Sprintf("%d min", m)
 	case m == 0:

@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/auth"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/download"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/java"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launcher"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/loader"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/auth"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/download"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/java"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/launcher"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/loader"
 )
 
 // outDir is where the rendered frames are written.
@@ -132,14 +132,14 @@ func demoSnapshot() launcher.Snapshot {
 		},
 		EditingOK: true,
 		Runtimes: []java.Runtime{
-			{Path: "/home/gerry/.config/minecraft-instance/shared/runtimes/java-runtime-delta/linux/java-runtime-delta/bin/java",
+			{Path: "/home/gerry/.config/micromanage/shared/runtimes/java-runtime-delta/linux/java-runtime-delta/bin/java",
 				Major: 21, FullVersion: "21.0.7", Vendor: "Microsoft", Component: "java-runtime-delta", Source: "shared store"},
 			{Path: "/usr/bin/java", Major: 21, FullVersion: "21.0.12.1", Vendor: "OpenJDK", Source: "PATH"},
 		},
 		Config: map[string]string{
 			"minecraft-path": "/home/gerry/.minecraft",
 			"instances-path": "/home/gerry/.minecraft-instances",
-			"backup-path":    "/home/gerry/.config/minecraft-instance/backup",
+			"backup-path":    "/home/gerry/.config/micromanage/backup",
 		},
 		Status: "6 instances",
 		Stats:  demoStats(now),

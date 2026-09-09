@@ -12,8 +12,8 @@ import (
 	"gioui.org/op"
 	"gioui.org/unit"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launcher"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/launcher"
 )
 
 // frame lays the interface out once against a router, so queued pointer

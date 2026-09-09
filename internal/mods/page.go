@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/download"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/download"
 )
 
 // Endpoints are the services a mod's page is looked up on.

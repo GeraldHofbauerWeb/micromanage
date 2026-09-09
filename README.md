@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="packaging/minecraft-instance-manager-plain.svg" alt="" width="132" height="132">
+  <img src="packaging/micromanage-plain.svg" alt="" width="132" height="132">
 </p>
 
-# Minecraft Instance Manager
+# MicroManage
 
 A Minecraft launcher and instance manager. Keep several setups side by side,
 switch between them instantly, and launch them — sign-in, version, mod loader
@@ -55,8 +55,8 @@ Supported loaders: NeoForge, Forge, Fabric and Quilt.
 ### From source
 
 ```bash
-git clone https://github.com/GeraldHofbauerWeb/minecraft-instance-switcher.git
-cd minecraft-instance-switcher
+git clone https://github.com/GeraldHofbauerWeb/micromanage.git
+cd micromanage
 make install
 ```
 
@@ -69,13 +69,13 @@ Debian) the build falls back to the OpenGL backend automatically.
 
 ### Pre-built binaries
 
-Download from the [releases page](https://github.com/GeraldHofbauerWeb/minecraft-instance-switcher/releases).
+Download from the [releases page](https://github.com/GeraldHofbauerWeb/micromanage/releases).
 The CLI (`-cli-`) and the GUI (`-gui-`) are separate archives; the CLI is a
 static binary for every platform, the GUI is built per platform.
 
 ## Using it
 
-Run `minecraft-instance-manager-gui`, or start *Minecraft Instance Manager*
+Run `micromanage-launcher`, or start *MicroManage*
 from the application menu.
 
 1. **Sign in.** *Sign in with Microsoft* shows a code to enter at
@@ -121,7 +121,7 @@ store and their now-redundant copies freed.
 
 ### From the command line
 
-Everything the GUI does is available in `minecraft-instance-manager`, which is
+Everything the GUI does is available in `micromanage`, which is
 also how it is tested.
 
 | Command | What it does |
@@ -163,7 +163,7 @@ that symlink.
 ### The shared store
 
 Everything downloadable lives once, under
-`~/.config/minecraft-instance/shared`:
+`~/.config/micromanage/shared`:
 
 ```
 shared/
@@ -224,7 +224,7 @@ token at the next launch, and only when that is refused does the account ask to
 sign in again.
 
 **On credentials:** accounts are stored in
-`~/.config/minecraft-instance/accounts.json` with mode 0600. The file is not
+`~/.config/micromanage/accounts.json` with mode 0600. The file is not
 encrypted — Go has no cross-platform keyring without cgo, and claiming
 otherwise would be worse than saying so.
 

@@ -13,7 +13,7 @@ import (
 	"gioui.org/op"
 	"gioui.org/unit"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launcher"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/launcher"
 )
 
 // Screenshot renders one frame of the interface offscreen and writes it as a

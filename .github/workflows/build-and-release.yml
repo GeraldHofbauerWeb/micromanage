@@ -82,17 +82,17 @@ jobs:
         GOOS: ${{ matrix.os }}
         GOARCH: ${{ matrix.arch }}
       run: |
-        BINARY_NAME="minecraft-instance-manager"
+        BINARY_NAME="micromanage"
         if [ "${{ matrix.os }}" = "windows" ]; then
           BINARY_NAME="${BINARY_NAME}.exe"
         fi
 
         mkdir -p dist
         go build -ldflags="-s -w -X main.Version=${GITHUB_REF_NAME}" \
-          -o "dist/${BINARY_NAME}" ./cmd/minecraft-instance-manager
+          -o "dist/${BINARY_NAME}" ./cmd/micromanage
 
         cd dist
-        ARCHIVE="minecraft-instance-manager-cli-${{ matrix.os }}-${{ matrix.arch }}"
+        ARCHIVE="micromanage-cli-${{ matrix.os }}-${{ matrix.arch }}"
         if [ "${{ matrix.os }}" = "windows" ]; then
           zip "${ARCHIVE}.zip" "${BINARY_NAME}"
         else
@@ -104,7 +104,7 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: minecraft-instance-manager-cli-${{ matrix.os }}-${{ matrix.arch }}
+        name: micromanage-cli-${{ matrix.os }}-${{ matrix.arch }}
         path: |
           dist/*.tar.gz
           dist/*.zip
@@ -157,17 +157,17 @@ jobs:
         GOARCH: ${{ matrix.goarch }}
         CGO_ENABLED: ${{ matrix.cgo }}
       run: |
-        BINARY_NAME="minecraft-instance-manager-gui"
+        BINARY_NAME="micromanage-launcher"
         if [ "${{ matrix.goos }}" = "windows" ]; then
           BINARY_NAME="${BINARY_NAME}.exe"
         fi
 
         mkdir -p dist
         go build -ldflags="-s -w -X main.Version=${GITHUB_REF_NAME} -X main.defaultMSAClientID=${{ vars.MSA_CLIENT_ID }}" \
-          -o "dist/${BINARY_NAME}" ./cmd/minecraft-instance-manager-gui
+          -o "dist/${BINARY_NAME}" ./cmd/micromanage-launcher
 
         cd dist
-        ARCHIVE="minecraft-instance-manager-gui-${{ matrix.goos }}-${{ matrix.goarch }}"
+        ARCHIVE="micromanage-launcher-${{ matrix.goos }}-${{ matrix.goarch }}"
         if [ "${{ matrix.goos }}" = "windows" ]; then
           zip "${ARCHIVE}.zip" "${BINARY_NAME}"
         else
@@ -179,7 +179,7 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: minecraft-instance-manager-gui-${{ matrix.goos }}-${{ matrix.goarch }}
+        name: micromanage-launcher-${{ matrix.goos }}-${{ matrix.goarch }}
         path: |
           dist/*.tar.gz
           dist/*.zip

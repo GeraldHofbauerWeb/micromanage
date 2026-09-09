@@ -11,7 +11,7 @@ import (
 	"gioui.org/unit"
 	"gioui.org/widget/material"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
 )
 
 // The launcher sits next to a game that is mostly played at night, in caves.

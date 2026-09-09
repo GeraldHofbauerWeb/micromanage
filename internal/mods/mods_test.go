@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/download"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/download"
 )
 
 func writeJar(t *testing.T, dir, name string, files map[string]string) string {

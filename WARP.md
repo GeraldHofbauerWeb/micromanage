@@ -4,7 +4,7 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 ## Project Overview
 
-The Minecraft Instance Manager is a Go application that manages multiple Minecraft installations and launches them. It provides a graphical launcher (Gio) and a command-line interface; the Bubble Tea TUI was removed in v2.
+MicroManage is a Go application that manages multiple Minecraft installations and launches them. It provides a graphical launcher (Gio) and a command-line interface; the Bubble Tea TUI was removed in v2.
 
 It resolves versions, downloads libraries, assets and natives into a store shared across instances, picks a matching Java runtime and builds the launch command line itself. Switching between instances still uses symlinks.
 
@@ -27,8 +27,8 @@ The system works by:
 ```
 
 ### Key components
-- `cmd/minecraft-instance-manager/` — the CLI, built with CGO_ENABLED=0 for every target
-- `cmd/minecraft-instance-manager-gui/` — the GUI; separate because Gio needs cgo
+- `cmd/micromanage/` — the CLI, built with CGO_ENABLED=0 for every target
+- `cmd/micromanage-launcher/` — the GUI; separate because Gio needs cgo
 - `internal/instance/` — instances, their metadata and detection
 - `internal/mojang/` — version manifests, inheritance, per-platform rules
 - `internal/download/` — parallel, SHA-1 verified downloads
@@ -49,22 +49,22 @@ make build
 make test
 
 # Test the application locally
-./minecraft-instance-manager list
+./micromanage list
 
 # Test all core functions
-./minecraft-instance-manager create test-instance
-./minecraft-instance-manager switch test-instance
-./minecraft-instance-manager list
-./minecraft-instance-manager restore
+./micromanage create test-instance
+./micromanage switch test-instance
+./micromanage list
+./micromanage restore
 
 # Clean up test instance
-./minecraft-instance-manager delete test-instance
+./micromanage delete test-instance
 ```
 
 ### Build and Release
 ```bash
 # The CLI cross-compiles everywhere without cgo
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/minecraft-instance-manager
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/micromanage
 
 # The GUI needs cgo on Linux and macOS, so it builds on a native runner.
 # Windows is the exception: Gio is pure Go there.

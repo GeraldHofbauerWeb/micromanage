@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/auth"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/auth"
 )
 
 // accountsFileName holds the signed-in accounts.

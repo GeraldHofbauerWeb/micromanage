@@ -17,8 +17,8 @@ import (
 	"gioui.org/unit"
 	"gioui.org/widget"
 
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
-	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launcher"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
+	"github.com/GeraldHofbauerWeb/micromanage/internal/launcher"
 )
 
 // invalidateInterval bounds how often the window repaints in response to
@@ -31,7 +31,7 @@ const invalidateInterval = 30 * time.Millisecond
 
 // appID is the desktop identity of the window: it has to match the name of
 // the installed .desktop file (see packaging/), or nothing links the two.
-const appID = "minecraft-instance-manager"
+const appID = "micromanage"
 
 // Options configures the launcher window.
 type Options struct {
@@ -65,12 +65,12 @@ func Run(opts Options) error {
 	// The desktop matches a window to its .desktop file by this id — the
 	// Wayland app_id, the X11 class — so it has to be the file's name. Left
 	// to itself Gio uses the binary's name, and the dock then shows
-	// "minecraft-instance-manager-gui" under a blank icon.
+	// "micromanage-launcher" under a blank icon.
 	app.ID = appID
 
 	w := new(app.Window)
 	w.Option(
-		app.Title("Instance Manager"),
+		app.Title("MicroManage"),
 		app.Size(unit.Dp(1180), unit.Dp(760)),
 		app.MinSize(unit.Dp(880), unit.Dp(560)),
 	)
@@ -149,7 +149,7 @@ func RunMain(opts Options) {
 	go func() {
 		if err := Run(opts); err != nil {
 			// Reported on stderr because there may be no window to show it in.
-			os.Stderr.WriteString("minecraft-instance-manager: " + err.Error() + "\n")
+			os.Stderr.WriteString("micromanage: " + err.Error() + "\n")
 			os.Exit(1)
 		}
 		os.Exit(0)
@@ -326,7 +326,7 @@ func (u *ui) layoutTopBar(gtx layout.Context, snap launcher.Snapshot) layout.Dim
 								func(gtx layout.Context) layout.Dimensions {
 									return row(gtx, unit.Dp(10),
 										rigid(func(gtx layout.Context) layout.Dimensions { return slab(gtx, th.P.Sky, unit.Dp(20)) }),
-										rigid(func(gtx layout.Context) layout.Dimensions { return th.brand(gtx, "Instance Manager", th.P.Text) }),
+										rigid(func(gtx layout.Context) layout.Dimensions { return th.brand(gtx, "MicroManage", th.P.Text) }),
 									)
 								})
 						})
