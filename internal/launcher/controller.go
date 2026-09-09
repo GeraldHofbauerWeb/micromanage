@@ -16,6 +16,8 @@ import (
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/java"
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launch"
+	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/loader"
+	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/mojang"
 )
 
 // Action is a request from the UI. Every action is handled off the render
@@ -83,6 +85,15 @@ type (
 	// ActionReclaim removes from the instances the game files the shared
 	// store already holds.
 	ActionReclaim struct{}
+	// ActionListVersions fetches a version list: the Minecraft releases
+	// when Kind is empty, otherwise one loader's releases for MC.
+	ActionListVersions struct {
+		Kind instance.LoaderType
+		MC   string
+	}
+	// ActionInstallLoader installs an instance's loader profile into the
+	// store ahead of its first launch.
+	ActionInstallLoader struct{ Name string }
 	// ActionSetConfig changes a manager configuration key.
 	ActionSetConfig struct{ Key, Value string }
 )
@@ -107,6 +118,8 @@ func (ActionStopGame) isAction()       {}
 func (ActionHarvest) isAction()        {}
 func (ActionScanStorage) isAction()    {}
 func (ActionReclaim) isAction()        {}
+func (ActionListVersions) isAction()   {}
+func (ActionInstallLoader) isAction()  {}
 func (ActionSetConfig) isAction()      {}
 
 // Event is a state change produced by a worker.
@@ -134,6 +147,9 @@ type Controller struct {
 	// MSAEndpoints overrides the sign-in services, which only a test does.
 	MSAEndpoints auth.Endpoints
 	Version      string
+	// Loaders lists and installs mod loaders. Its endpoints are replaceable
+	// for tests.
+	Loaders *loader.Client
 
 	store  *Store
 	events chan Event
@@ -147,11 +163,13 @@ type Controller struct {
 
 // NewController wires a controller against the core packages.
 func NewController(m *instance.Manager, store *Store, accounts *AccountStore, version string) *Controller {
+	layout := launch.NewLayout(m.AppDir)
 	return &Controller{
 		Manager:  m,
-		Layout:   launch.NewLayout(m.AppDir),
+		Layout:   layout,
 		Accounts: accounts,
 		Version:  version,
+		Loaders:  loader.NewClient(layout, download.New()),
 		store:    store,
 		// Buffered so a burst of progress never blocks a worker.
 		events:  make(chan Event, 256),
@@ -283,6 +301,10 @@ func (c *Controller) run(ctx context.Context, id TaskID, a Action) {
 		c.doHarvest(ctx, id)
 	case ActionReclaim:
 		c.doReclaim(ctx, id)
+	case ActionListVersions:
+		c.doListVersions(ctx, action)
+	case ActionInstallLoader:
+		c.doInstallLoader(ctx, id, action.Name)
 	case ActionScanStorage:
 		c.doScanStorage(ctx)
 	case ActionSetConfig:
@@ -335,11 +357,123 @@ func (c *Controller) detector(instances []instance.Instance) *java.Detector {
 func (c *Controller) doSelect(name string) {
 	meta, err := c.Manager.GetMeta(name)
 	ok := err == nil
+	installed := c.profileInstalled(meta)
 	c.emit(Event{Terminal: true, Apply: func(s *Store) {
 		s.SetSelected(name)
 		s.SetEditing(meta, ok)
+		s.SetProfileInstalled(installed)
 	}})
 	c.doLoadContent(name)
+}
+
+// profileInstalled reports whether an instance's version is in the store.
+// Vanilla counts as installed: the launcher fetches it itself.
+func (c *Controller) profileInstalled(meta instance.Meta) bool {
+	id, err := versionIDFor(meta, meta.Loader)
+	if err != nil {
+		return false
+	}
+	return !launch.IsLoaderProfile(id) || c.Loaders.Installed(id)
+}
+
+// doListVersions fetches a version list on demand and publishes it. The
+// pending marker lets a picker say "loading" instead of "nothing".
+func (c *Controller) doListVersions(ctx context.Context, a ActionListVersions) {
+	if a.Kind == "" || a.Kind == instance.LoaderVanilla {
+		c.emit(Event{Terminal: true, Apply: func(s *Store) { s.SetVersionsPending(MCVersionsKey, true) }})
+		client := mojang.NewClient(c.Loaders.Downloader, c.Layout.Versions(), c.Layout.Cache())
+		manifest, err := client.Manifest(ctx)
+		if err != nil {
+			c.emit(Event{Terminal: true, Apply: func(s *Store) { s.SetVersionsPending(MCVersionsKey, false) }})
+			c.fail(err)
+			return
+		}
+		var ids []string
+		for _, v := range manifest.OfType("release") {
+			ids = append(ids, v.ID)
+		}
+		c.emit(Event{Terminal: true, Apply: func(s *Store) {
+			s.SetMCVersions(ids)
+			s.SetVersionsPending(MCVersionsKey, false)
+		}})
+		return
+	}
+
+	key := VersionsKey(a.Kind, a.MC)
+	c.emit(Event{Terminal: true, Apply: func(s *Store) { s.SetVersionsPending(key, true) }})
+	versions, err := c.Loaders.Versions(ctx, a.Kind, a.MC)
+	if err != nil {
+		c.emit(Event{Terminal: true, Apply: func(s *Store) { s.SetVersionsPending(key, false) }})
+		c.fail(fmt.Errorf("listing %s versions for %s: %w", a.Kind.Display(), a.MC, err))
+		return
+	}
+	c.emit(Event{Terminal: true, Apply: func(s *Store) { s.SetLoaderVersions(key, versions) }})
+}
+
+// doInstallLoader installs an instance's loader as its own task.
+func (c *Controller) doInstallLoader(ctx context.Context, id TaskID, name string) {
+	meta, err := c.Manager.GetMeta(name)
+	if err != nil {
+		c.fail(err)
+		return
+	}
+	c.beginTask(id, TaskInstall, "Installing "+meta.Loader.String())
+	if _, err := c.ensureLoader(ctx, id, meta); err != nil {
+		c.finishTask(id, err)
+		return
+	}
+	c.finishTask(id, nil)
+	c.setStatus(meta.Loader.String() + " is installed")
+	c.doSelect(name)
+}
+
+// ensureLoader makes sure an instance's version can be launched, installing
+// the loader when its profile is missing, and returns the version id.
+func (c *Controller) ensureLoader(ctx context.Context, id TaskID, meta instance.Meta) (string, error) {
+	versionID, err := versionIDFor(meta, meta.Loader)
+	if err != nil {
+		return "", err
+	}
+	if !launch.IsLoaderProfile(versionID) || c.Loaders.Installed(versionID) {
+		return versionID, nil
+	}
+
+	c.step(id, "Installing "+meta.Loader.String())
+
+	// Forge-style installers are Java programs; any usable runtime does.
+	javaPath := ""
+	if meta.Loader.Type == instance.LoaderForge || meta.Loader.Type == instance.LoaderNeoForge {
+		instances, err := c.Manager.ListInstances()
+		if err != nil {
+			return "", err
+		}
+		runtimes := c.store.Snapshot().Runtimes
+		if len(runtimes) == 0 {
+			runtimes = c.detector(instances).Detect(ctx)
+		}
+		sel, err := java.Select(runtimes, java.Requirement{})
+		if err != nil {
+			return "", fmt.Errorf("installing %s: %w", meta.Loader, err)
+		}
+		javaPath = sel.Runtime.Path
+	}
+
+	progress := func(line string) {
+		c.emit(Event{Apply: func(s *Store) {
+			s.UpdateTask(id, func(t *Task) { t.Message = line })
+		}})
+	}
+	installed, err := c.Loaders.Install(ctx, meta.Loader.Type, meta.MinecraftVersion, meta.Loader.Version, javaPath, progress)
+	if err != nil {
+		return "", err
+	}
+	c.emit(Event{Terminal: true, Apply: func(s *Store) {
+		s.UpdateTask(id, func(t *Task) { t.Message = "" })
+		if s.Snapshot().Selected == meta.Name {
+			s.SetProfileInstalled(true)
+		}
+	}})
+	return installed, nil
 }
 
 // doLoadContent lists every kind of content at once. Eight directory reads
@@ -609,14 +743,25 @@ func (c *Controller) doCreate(ctx context.Context, id TaskID, a ActionCreate) {
 	meta := instance.DefaultMeta(a.Name)
 	meta.MinecraftVersion = a.Version
 	meta.Loader = a.Loader
-	meta.ResolvedVersionID = a.Version
+	if a.Loader.Type == "" {
+		meta.Loader.Type = instance.LoaderVanilla
+	}
+	meta.ResolvedVersionID = loader.VersionID(meta.Loader.Type, a.Version, a.Loader.Version)
 	if err := c.Manager.SetMeta(a.Name, meta); err != nil {
 		c.finishTask(id, err)
 		return
 	}
 
-	c.finishTask(id, nil)
 	c.doRefresh(ctx)
+	c.doSelect(a.Name)
+
+	// A modded instance is only useful once its loader is in the store, so
+	// the install is part of creating it rather than a surprise at launch.
+	if _, err := c.ensureLoader(ctx, id, meta); err != nil {
+		c.finishTask(id, err)
+		return
+	}
+	c.finishTask(id, nil)
 	c.doSelect(a.Name)
 }
 
@@ -805,7 +950,7 @@ func (c *Controller) doLaunch(ctx context.Context, id TaskID, name string) {
 	}
 
 	loader := meta.Loader
-	versionID, err := versionIDFor(meta, loader)
+	versionID, err := c.ensureLoader(ctx, id, meta)
 	if err != nil {
 		c.finishTask(id, err)
 		return

@@ -28,8 +28,11 @@ and all — from one window.
   are read as they are: the Minecraft version, the mod loader, the heap size
   and the JVM flags are all detected from `launcher_profiles.json` and
   `versions/`.
-- **Runs modded instances without an installer** where the loader profile is
-  already on disk — which it is, for anything you have played before.
+- **Installs mod loaders itself.** Pick a Minecraft release and a NeoForge,
+  Forge, Fabric or Quilt version from the lists the projects publish, and the
+  loader goes into the shared store — Fabric and Quilt as a profile from their
+  meta service, NeoForge and Forge through their own installer. Anything you
+  have played before is already on disk and needs no install at all.
 - **Switches with symlinks**, so the game keeps writing its saves, screenshots
   and configs into the instance directory exactly as before.
 - **Puts the instance on a workbench.** Mods, configs, worlds, resource and
@@ -76,9 +79,12 @@ from the application menu.
    its session on its own. It needs an Azure application id (see below). A
    local account plays single-player in full but is rejected by servers running
    in online mode.
-2. **Pick an instance** on the left, or press **+** to make one. New instances
-   are empty and instant; duplicating an existing one copies its mods, configs
-   and packs but not its worlds.
+2. **Pick an instance** on the left, or press **+** to make one. The version
+   fields open a list — Minecraft releases from Mojang, loader builds from the
+   loader's own service — with a filter, and accept a typed version the list
+   does not know yet. New instances are empty and instant; a loader is
+   installed as part of creating one. Duplicating an existing instance copies
+   its mods, configs and packs but not its worlds.
 3. **Work on it.** The tabs show what the instance holds. Every entry can be
    opened with the program your desktop uses for it, shown in the file
    manager, or deleted; a mod can be switched off, which renames it to

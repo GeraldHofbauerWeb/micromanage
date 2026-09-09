@@ -10,7 +10,7 @@ type iconSet struct {
 	Refresh, Settings, Account, Play, Stop, Add, Search,
 	Eye, EyeOff, More, Close, Back, OpenInNew, Folder, Delete,
 	Edit, Launch, Info, Warning, Power, Clear, SignOut, Photo,
-	Bug, Save, Build, Memory, Check, Description *widget.Icon
+	Bug, Save, Build, Memory, Check, Description, DropDown, Download *widget.Icon
 }
 
 func loadIcons() iconSet {
@@ -51,5 +51,7 @@ func loadIcons() iconSet {
 		Memory:      mk(icons.HardwareMemory),
 		Check:       mk(icons.NavigationCheck),
 		Description: mk(icons.ActionDescription),
+		DropDown:    mk(icons.NavigationArrowDropDown),
+		Download:    mk(icons.FileFileDownload),
 	}
 }

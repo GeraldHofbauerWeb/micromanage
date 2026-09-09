@@ -17,14 +17,24 @@ type dialogs struct {
 
 	create createDialog
 	del    deleteDialog
+	pick   picker
 }
 
 func newDialogs() dialogs {
-	return dialogs{create: newCreateDialog()}
+	return dialogs{create: newCreateDialog(), pick: newPicker()}
 }
 
 func (d *dialogs) Layout(gtx layout.Context, u *ui, snap launcher.Snapshot) layout.Dimensions {
 	switch {
+	case d.pick.open:
+		// The picker sits above whatever opened it; that dialog keeps its
+		// state and returns when the choice is made.
+		if d.scrim.Clicked(gtx) {
+			d.pick.open = false
+		}
+		return u.th.modal(gtx, &d.scrim, unit.Dp(460), func(gtx layout.Context) layout.Dimensions {
+			return d.pick.Layout(gtx, u, snap)
+		})
 	case d.create.open:
 		if d.scrim.Clicked(gtx) {
 			d.create.open = false
@@ -52,6 +62,21 @@ func (d *dialogs) openDelete(inst instance.Instance) {
 	d.del.open = true
 }
 
+// pickMinecraft opens the release list.
+func (d *dialogs) pickMinecraft(u *ui, current string, onPick func(string)) {
+	d.pick.show(u, "Minecraft version", pickMinecraft, "", "", current, true, onPick)
+}
+
+// pickLoaderVersion opens one loader's list for a game version.
+func (d *dialogs) pickLoaderVersion(u *ui, kind instance.LoaderType, mc, current string, onPick func(string)) {
+	d.pick.show(u, kind.Display()+" for "+mc, pickLoader, kind, mc, current, true, onPick)
+}
+
+// pickInstance opens the instance list.
+func (d *dialogs) pickInstance(u *ui, current string, onPick func(string)) {
+	d.pick.show(u, "Copy which instance?", pickInstances, "", "", current, false, onPick)
+}
+
 // --- new instance ---
 
 // createDialog makes an instance. Empty is the default because cloning
@@ -60,27 +85,27 @@ func (d *dialogs) openDelete(inst instance.Instance) {
 type createDialog struct {
 	open bool
 
-	name    *widget.Editor
-	version *widget.Editor
+	name *widget.Editor
 
+	version       string
+	pickVersion   widget.Clickable
 	loaderChoices []widget.Clickable
-	loaderVersion *widget.Editor
+	loaderVersion string
+	pickLoaderVer widget.Clickable
 	loader        instance.LoaderType
 
 	fromScratch, fromClone widget.Clickable
 	clone                  bool
 	cloneSource            string
-	cloneRows              []widget.Clickable
+	pickSource             widget.Clickable
 
 	confirm, cancel widget.Clickable
 }
 
 func newCreateDialog() createDialog {
 	return createDialog{
-		name:          newEditor(),
-		version:       newEditor(),
-		loaderVersion: newEditor(),
-		loader:        instance.LoaderVanilla,
+		name:   newEditor(),
+		loader: instance.LoaderVanilla,
 	}
 }
 
@@ -90,15 +115,16 @@ func (d *createDialog) show(snap launcher.Snapshot, cloneFrom string) {
 	d.open = true
 	d.name.SetText("")
 	d.loader = instance.LoaderVanilla
-	d.loaderVersion.SetText("")
+	d.loaderVersion = ""
+	d.version = ""
 	d.clone = cloneFrom != ""
 	d.cloneSource = cloneFrom
 
 	if snap.Editing.MinecraftVersion != "" {
-		d.version.SetText(snap.Editing.MinecraftVersion)
+		d.version = snap.Editing.MinecraftVersion
 		if cloneFrom != "" {
 			d.loader = snap.Editing.Loader.Type
-			d.loaderVersion.SetText(snap.Editing.Loader.Version)
+			d.loaderVersion = snap.Editing.Loader.Version
 			d.name.SetText(cloneFrom + "-copy")
 		}
 	}
@@ -110,14 +136,24 @@ func (d *createDialog) Layout(gtx layout.Context, u *ui, snap launcher.Snapshot)
 	for len(d.loaderChoices) < len(loaders) {
 		d.loaderChoices = append(d.loaderChoices, widget.Clickable{})
 	}
-	for len(d.cloneRows) < len(snap.Instances) {
-		d.cloneRows = append(d.cloneRows, widget.Clickable{})
-	}
 
 	for i, lt := range loaders {
-		if d.loaderChoices[i].Clicked(gtx) {
+		if d.loaderChoices[i].Clicked(gtx) && d.loader != lt {
 			d.loader = lt
+			// A version belongs to one loader; the next one starts fresh.
+			d.loaderVersion = ""
 		}
+	}
+	if d.pickVersion.Clicked(gtx) {
+		u.dialogs.pickMinecraft(u, d.version, func(v string) {
+			if v != d.version {
+				d.loaderVersion = ""
+			}
+			d.version = v
+		})
+	}
+	if d.pickLoaderVer.Clicked(gtx) {
+		u.dialogs.pickLoaderVersion(u, d.loader, d.version, d.loaderVersion, func(v string) { d.loaderVersion = v })
 	}
 	if d.fromScratch.Clicked(gtx) {
 		d.clone = false
@@ -125,19 +161,21 @@ func (d *createDialog) Layout(gtx layout.Context, u *ui, snap launcher.Snapshot)
 	if d.fromClone.Clicked(gtx) {
 		d.clone = true
 	}
-	for i := range snap.Instances {
-		if d.cloneRows[i].Clicked(gtx) {
-			d.cloneSource = snap.Instances[i].Name
-		}
+	if d.pickSource.Clicked(gtx) {
+		u.dialogs.pickInstance(u, d.cloneSource, func(v string) { d.cloneSource = v })
 	}
 	if d.cancel.Clicked(gtx) {
 		d.open = false
 	}
-	if d.confirm.Clicked(gtx) {
+
+	ready := strings.TrimSpace(d.name.Text()) != "" && d.version != "" &&
+		(d.loader == instance.LoaderVanilla || d.loaderVersion != "") &&
+		(!d.clone || d.cloneSource != "")
+	if ready && d.confirm.Clicked(gtx) {
 		action := launcher.ActionCreate{
 			Name:    strings.TrimSpace(d.name.Text()),
-			Version: strings.TrimSpace(d.version.Text()),
-			Loader:  instance.LoaderSpec{Type: d.loader, Version: strings.TrimSpace(d.loaderVersion.Text())},
+			Version: d.version,
+			Loader:  instance.LoaderSpec{Type: d.loader, Version: d.loaderVersion},
 		}
 		if d.clone {
 			action.Clone = d.cloneSource
@@ -155,19 +193,6 @@ func (d *createDialog) Layout(gtx layout.Context, u *ui, snap launcher.Snapshot)
 		}),
 		rigid(func(gtx layout.Context) layout.Dimensions { return th.field(gtx, d.name, "Name", "my-modpack") }),
 		rigid(func(gtx layout.Context) layout.Dimensions {
-			return row(gtx, sp3,
-				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					return th.field(gtx, d.version, "Minecraft version", "1.21.1")
-				}),
-				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					if d.loader == instance.LoaderVanilla {
-						return layout.Dimensions{}
-					}
-					return th.field(gtx, d.loaderVersion, d.loader.Display()+" version", "21.1.248")
-				}),
-			)
-		}),
-		rigid(func(gtx layout.Context) layout.Dimensions {
 			return column(gtx, unit.Dp(6),
 				rigid(func(gtx layout.Context) layout.Dimensions { return th.small(gtx, "Mod loader") }),
 				rigid(func(gtx layout.Context) layout.Dimensions {
@@ -182,10 +207,38 @@ func (d *createDialog) Layout(gtx layout.Context, u *ui, snap launcher.Snapshot)
 				}),
 			)
 		}),
+		rigid(func(gtx layout.Context) layout.Dimensions {
+			return row(gtx, sp3,
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					return th.selectField(gtx, u, &d.pickVersion, "Minecraft version", d.version, "Choose a release")
+				}),
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					if d.loader == instance.LoaderVanilla {
+						return layout.Dimensions{}
+					}
+					placeholder := "Choose a version"
+					if d.version == "" {
+						placeholder = "Minecraft version first"
+					}
+					return th.selectField(gtx, u, &d.pickLoaderVer, d.loader.Display()+" version", d.loaderVersion, placeholder)
+				}),
+			)
+		}),
+		rigid(func(gtx layout.Context) layout.Dimensions {
+			if d.loader == instance.LoaderVanilla {
+				return layout.Dimensions{}
+			}
+			return th.wrapped(gtx, d.loader.Display()+" is installed into the shared store when the instance is created.", th.P.TextDim)
+		}),
 		rigid(func(gtx layout.Context) layout.Dimensions { return d.layoutSource(gtx, u, snap) }),
 		rigid(func(gtx layout.Context) layout.Dimensions {
 			return row(gtx, sp2,
-				rigid(func(gtx layout.Context) layout.Dimensions { return th.primary(gtx, &d.confirm, nil, "Create") }),
+				rigid(func(gtx layout.Context) layout.Dimensions {
+					if !ready {
+						return th.secondary(gtx, &d.confirm, "Create")
+					}
+					return th.primary(gtx, &d.confirm, nil, "Create")
+				}),
 				rigid(func(gtx layout.Context) layout.Dimensions { return th.ghost(gtx, &d.cancel, nil, "Cancel") }),
 			)
 		}),
@@ -213,15 +266,14 @@ func (d *createDialog) layoutSource(gtx layout.Context, u *ui, snap launcher.Sna
 		return column(gtx, unit.Dp(6), children...)
 	}
 
-	children = append(children, rigid(func(gtx layout.Context) layout.Dimensions {
-		return th.wrapped(gtx, "Mods, configs and packs are copied. Worlds and screenshots are not.", th.P.TextDim)
-	}))
-	for i, inst := range snap.Instances {
-		i, inst := i, inst
-		children = append(children, rigid(func(gtx layout.Context) layout.Dimensions {
-			return th.pill(gtx, &d.cloneRows[i], inst.Name == d.cloneSource, inst.Name)
-		}))
-	}
+	children = append(children,
+		rigid(func(gtx layout.Context) layout.Dimensions {
+			return th.selectField(gtx, u, &d.pickSource, "Instance to copy", d.cloneSource, "Choose an instance")
+		}),
+		rigid(func(gtx layout.Context) layout.Dimensions {
+			return th.wrapped(gtx, "Mods, configs and packs are copied. Worlds and screenshots are not.", th.P.TextDim)
+		}),
+	)
 	return column(gtx, unit.Dp(6), children...)
 }
 

@@ -292,6 +292,9 @@ func (w *workbench) layoutHeader(gtx layout.Context, u *ui, snap launcher.Snapsh
 						if !inst.LastPlayed.IsZero() {
 							line += " · played " + humaniseSince(inst.LastPlayed)
 						}
+						if !snap.ProfileInstalled && snap.EditingOK {
+							line += " · installs on first play"
+						}
 						return th.mono(gtx, line)
 					}),
 				)
@@ -323,7 +326,8 @@ func (w *workbench) layoutActivity(gtx layout.Context, u *ui, snap launcher.Snap
 	inset := layout.Inset{Bottom: sp3, Left: sp4, Right: sp4}
 
 	switch {
-	case taskActive(snap.Task) && snap.Task.Kind == launcher.TaskLaunch:
+	case taskActive(snap.Task) && (snap.Task.Kind == launcher.TaskLaunch ||
+		snap.Task.Kind == launcher.TaskInstall || snap.Task.Kind == launcher.TaskCreate):
 		return inset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			gtx.Constraints.Min.X = gtx.Constraints.Max.X
 			return column(gtx, unit.Dp(6),

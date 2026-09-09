@@ -20,8 +20,11 @@ type instanceSettings struct {
 	// Editors are seeded when the edited instance changes; doing it every
 	// frame would overwrite whatever is being typed.
 	seededFor string
-	version   *widget.Editor
-	loaderVer *widget.Editor
+	version   string
+	loaderVer string
+	pickVer   widget.Clickable
+	pickLdr   widget.Clickable
+	install   widget.Clickable
 	minRAM    *widget.Editor
 	maxRAM    *widget.Editor
 	javaPath  *widget.Editor
@@ -39,27 +42,25 @@ type instanceSettings struct {
 
 func newInstanceSettings() instanceSettings {
 	return instanceSettings{
-		list:      newList(),
-		version:   newEditor(),
-		loaderVer: newEditor(),
-		minRAM:    newEditor(),
-		maxRAM:    newEditor(),
-		javaPath:  newEditor(),
-		jvmArgs:   &widget.Editor{},
-		notes:     &widget.Editor{},
-		newName:   newEditor(),
+		list:     newList(),
+		minRAM:   newEditor(),
+		maxRAM:   newEditor(),
+		javaPath: newEditor(),
+		jvmArgs:  &widget.Editor{},
+		notes:    &widget.Editor{},
+		newName:  newEditor(),
 	}
 }
 
 func (s *instanceSettings) seed(snap launcher.Snapshot) {
 	m := snap.Editing
 	s.seededFor = snap.Selected
-	s.version.SetText(m.MinecraftVersion)
+	s.version = m.MinecraftVersion
 	s.loader = m.Loader.Type
 	if s.loader == "" {
 		s.loader = instance.LoaderVanilla
 	}
-	s.loaderVer.SetText(m.Loader.Version)
+	s.loaderVer = m.Loader.Version
 	minMB, maxMB := m.Memory.Resolved()
 	s.minRAM.SetText(strconv.Itoa(minMB))
 	s.maxRAM.SetText(strconv.Itoa(maxMB))
@@ -72,8 +73,8 @@ func (s *instanceSettings) seed(snap launcher.Snapshot) {
 // collect reads the editors back into metadata.
 func (s *instanceSettings) collect(snap launcher.Snapshot) instance.Meta {
 	m := snap.Editing
-	m.MinecraftVersion = strings.TrimSpace(s.version.Text())
-	m.Loader = instance.LoaderSpec{Type: s.loader, Version: strings.TrimSpace(s.loaderVer.Text())}
+	m.MinecraftVersion = s.version
+	m.Loader = instance.LoaderSpec{Type: s.loader, Version: s.loaderVer}
 	if s.loader == instance.LoaderVanilla {
 		m.Loader.Version = ""
 	}
@@ -101,9 +102,24 @@ func (s *instanceSettings) Layout(gtx layout.Context, u *ui, snap launcher.Snaps
 		s.loaderChoices = append(s.loaderChoices, widget.Clickable{})
 	}
 	for i, lt := range loaders {
-		if s.loaderChoices[i].Clicked(gtx) {
+		if s.loaderChoices[i].Clicked(gtx) && s.loader != lt {
 			s.loader = lt
+			s.loaderVer = ""
 		}
+	}
+	if s.pickVer.Clicked(gtx) {
+		u.dialogs.pickMinecraft(u, s.version, func(v string) {
+			if v != s.version {
+				s.loaderVer = ""
+			}
+			s.version = v
+		})
+	}
+	if s.pickLdr.Clicked(gtx) {
+		u.dialogs.pickLoaderVersion(u, s.loader, s.version, s.loaderVer, func(v string) { s.loaderVer = v })
+	}
+	if s.install.Clicked(gtx) {
+		u.ctrl.Dispatch(launcher.ActionInstallLoader{Name: snap.Selected})
 	}
 	if s.save.Clicked(gtx) {
 		u.ctrl.Dispatch(launcher.ActionSaveMeta{Name: snap.Selected, Meta: s.collect(snap)})
@@ -154,19 +170,6 @@ func (s *instanceSettings) layoutGame(gtx layout.Context, u *ui, snap launcher.S
 					"official launcher left on disk, or fill them in by hand.", th.P.Torch)
 			}),
 			rigid(func(gtx layout.Context) layout.Dimensions {
-				return row(gtx, sp3,
-					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-						return th.field(gtx, s.version, "Minecraft version", "1.21.1")
-					}),
-					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-						if s.loader == instance.LoaderVanilla {
-							return layout.Dimensions{}
-						}
-						return th.field(gtx, s.loaderVer, s.loader.Display()+" version", "21.1.248")
-					}),
-				)
-			}),
-			rigid(func(gtx layout.Context) layout.Dimensions {
 				return column(gtx, unit.Dp(6),
 					rigid(func(gtx layout.Context) layout.Dimensions { return th.small(gtx, "Mod loader") }),
 					rigid(func(gtx layout.Context) layout.Dimensions {
@@ -182,8 +185,40 @@ func (s *instanceSettings) layoutGame(gtx layout.Context, u *ui, snap launcher.S
 				)
 			}),
 			rigid(func(gtx layout.Context) layout.Dimensions {
+				return row(gtx, sp3,
+					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+						return th.selectField(gtx, u, &s.pickVer, "Minecraft version", s.version, "Choose a release")
+					}),
+					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+						if s.loader == instance.LoaderVanilla {
+							return layout.Dimensions{}
+						}
+						placeholder := "Choose a version"
+						if s.version == "" {
+							placeholder = "Minecraft version first"
+						}
+						return th.selectField(gtx, u, &s.pickLdr, s.loader.Display()+" version", s.loaderVer, placeholder)
+					}),
+				)
+			}),
+			rigid(func(gtx layout.Context) layout.Dimensions {
+				saved := s.version == snap.Editing.MinecraftVersion && s.loader == snap.Editing.Loader.Type &&
+					(s.loader == instance.LoaderVanilla || s.loaderVer == snap.Editing.Loader.Version)
+				if !saved || snap.ProfileInstalled || !configured || s.loader == instance.LoaderVanilla {
+					return layout.Dimensions{}
+				}
+				return th.notice(gtx, u.ic.Download, snap.Editing.Loader.String()+" is not installed yet. "+
+					"It is installed on the first Play, or now.", th.P.Torch)
+			}),
+			rigid(func(gtx layout.Context) layout.Dimensions {
 				return row(gtx, sp2,
 					rigid(func(gtx layout.Context) layout.Dimensions { return th.secondary(gtx, &s.save, "Save") }),
+					rigid(func(gtx layout.Context) layout.Dimensions {
+						if snap.ProfileInstalled || !configured || snap.Editing.Loader.Type == instance.LoaderVanilla {
+							return layout.Dimensions{}
+						}
+						return th.ghost(gtx, &s.install, u.ic.Download, "Install "+snap.Editing.Loader.String())
+					}),
 					rigid(func(gtx layout.Context) layout.Dimensions {
 						return th.ghost(gtx, &s.detect, u.ic.Search, "Detect from disk")
 					}),

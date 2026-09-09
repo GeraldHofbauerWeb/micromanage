@@ -14,6 +14,7 @@ import (
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/download"
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/java"
+	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/loader"
 )
 
 // Screen identifies the visible page.
@@ -38,6 +39,7 @@ const (
 	TaskDelete  TaskKind = "delete"
 	TaskHarvest TaskKind = "harvest"
 	TaskReclaim TaskKind = "reclaim"
+	TaskInstall TaskKind = "install"
 	TaskDetect  TaskKind = "detect"
 	TaskLogin   TaskKind = "login"
 )
@@ -105,6 +107,17 @@ type Snapshot struct {
 	// against a newly selected one.
 	Content    map[instance.ContentKind][]instance.Entry
 	ContentFor string
+	// ProfileInstalled reports whether the selected instance's version
+	// profile is in the store; a loader that is not gets installed on the
+	// first launch.
+	ProfileInstalled bool
+
+	// MCVersions lists the Minecraft releases, newest first, once asked for.
+	MCVersions []string
+	// LoaderVersions holds the releases of one loader for one Minecraft
+	// version, keyed by VersionsKey. VersionsPending marks a list on its way.
+	LoaderVersions  map[string][]loader.Version
+	VersionsPending map[string]bool
 
 	Runtimes []java.Runtime
 	Config   map[string]string
@@ -136,12 +149,17 @@ type Store struct {
 	accounts   []auth.Account
 	activeAcct string
 
-	instances  []instance.Instance
-	selected   string
-	editing    instance.Meta
-	editingOK  bool
-	content    map[instance.ContentKind][]instance.Entry
-	contentFor string
+	instances        []instance.Instance
+	selected         string
+	editing          instance.Meta
+	editingOK        bool
+	content          map[instance.ContentKind][]instance.Entry
+	contentFor       string
+	profileInstalled bool
+
+	mcVersions      []string
+	loaderVersions  map[string][]loader.Version
+	versionsPending map[string]bool
 
 	runtimes []java.Runtime
 	config   map[string]string
@@ -161,9 +179,11 @@ type Store struct {
 // NewStore returns an empty store.
 func NewStore() *Store {
 	return &Store{
-		screen:      ScreenInstances,
-		config:      map[string]string{},
-		reclaimable: map[string]int64{},
+		screen:          ScreenInstances,
+		config:          map[string]string{},
+		reclaimable:     map[string]int64{},
+		loaderVersions:  map[string][]loader.Version{},
+		versionsPending: map[string]bool{},
 	}
 }
 
@@ -173,24 +193,28 @@ func (s *Store) Snapshot() Snapshot {
 	defer s.mu.RUnlock()
 
 	snap := Snapshot{
-		Screen:        s.screen,
-		Accounts:      append([]auth.Account(nil), s.accounts...),
-		Instances:     append([]instance.Instance(nil), s.instances...),
-		Selected:      s.selected,
-		Editing:       s.editing,
-		EditingOK:     s.editingOK,
-		ContentFor:    s.contentFor,
-		Content:       make(map[instance.ContentKind][]instance.Entry, len(s.content)),
-		Runtimes:      append([]java.Runtime(nil), s.runtimes...),
-		Config:        make(map[string]string, len(s.config)),
-		Task:          s.task,
-		Game:          s.game,
-		Login:         s.login,
-		MSAConfigured: s.msaConfigured,
-		Status:        s.status,
-		Err:           s.err,
-		Reclaimable:   make(map[string]int64, len(s.reclaimable)),
-		StoreSize:     s.storeSize,
+		Screen:           s.screen,
+		Accounts:         append([]auth.Account(nil), s.accounts...),
+		Instances:        append([]instance.Instance(nil), s.instances...),
+		Selected:         s.selected,
+		Editing:          s.editing,
+		EditingOK:        s.editingOK,
+		ContentFor:       s.contentFor,
+		Content:          make(map[instance.ContentKind][]instance.Entry, len(s.content)),
+		ProfileInstalled: s.profileInstalled,
+		MCVersions:       append([]string(nil), s.mcVersions...),
+		LoaderVersions:   make(map[string][]loader.Version, len(s.loaderVersions)),
+		VersionsPending:  make(map[string]bool, len(s.versionsPending)),
+		Runtimes:         append([]java.Runtime(nil), s.runtimes...),
+		Config:           make(map[string]string, len(s.config)),
+		Task:             s.task,
+		Game:             s.game,
+		Login:            s.login,
+		MSAConfigured:    s.msaConfigured,
+		Status:           s.status,
+		Err:              s.err,
+		Reclaimable:      make(map[string]int64, len(s.reclaimable)),
+		StoreSize:        s.storeSize,
 	}
 	snap.Task.Steps = append([]string(nil), s.task.Steps...)
 	snap.Game.Tail = append([]string(nil), s.game.Tail...)
@@ -202,6 +226,12 @@ func (s *Store) Snapshot() Snapshot {
 	}
 	for k, v := range s.content {
 		snap.Content[k] = append([]instance.Entry(nil), v...)
+	}
+	for k, v := range s.loaderVersions {
+		snap.LoaderVersions[k] = append([]loader.Version(nil), v...)
+	}
+	for k, v := range s.versionsPending {
+		snap.VersionsPending[k] = v
 	}
 
 	for _, a := range s.accounts {
@@ -258,6 +288,49 @@ func (s *Store) SetEditing(meta instance.Meta, ok bool) {
 	defer s.mu.Unlock()
 	s.editing, s.editingOK = meta, ok
 }
+
+// SetProfileInstalled records whether the selected instance can launch
+// without an install first.
+func (s *Store) SetProfileInstalled(ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.profileInstalled = ok
+}
+
+// SetMCVersions publishes the Minecraft release list.
+func (s *Store) SetMCVersions(ids []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.mcVersions = ids
+}
+
+// SetLoaderVersions publishes one loader's releases for one game version.
+func (s *Store) SetLoaderVersions(key string, versions []loader.Version) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.loaderVersions[key] = versions
+	delete(s.versionsPending, key)
+}
+
+// SetVersionsPending marks a list as being fetched.
+func (s *Store) SetVersionsPending(key string, pending bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if pending {
+		s.versionsPending[key] = true
+	} else {
+		delete(s.versionsPending, key)
+	}
+}
+
+// VersionsKey names a loader's list for one game version. The Minecraft
+// release list itself uses MCVersionsKey.
+func VersionsKey(kind instance.LoaderType, mc string) string {
+	return string(kind) + "|" + mc
+}
+
+// MCVersionsKey is the pending marker for the Minecraft release list.
+const MCVersionsKey = "minecraft"
 
 func (s *Store) SetAccounts(list []auth.Account, active string) {
 	s.mu.Lock()

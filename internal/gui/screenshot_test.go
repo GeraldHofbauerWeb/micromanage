@@ -13,6 +13,7 @@ import (
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/java"
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launcher"
+	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/loader"
 )
 
 // outDir is where the rendered frames are written.
@@ -101,14 +102,15 @@ func demoSnapshot() launcher.Snapshot {
 	}
 
 	return launcher.Snapshot{
-		Screen:     launcher.ScreenInstances,
-		Accounts:   []auth.Account{account},
-		Active:     account,
-		HasAccount: true,
-		Instances:  instances,
-		Selected:   "sebsmodpack5",
-		Content:    content,
-		ContentFor: "sebsmodpack5",
+		Screen:           launcher.ScreenInstances,
+		Accounts:         []auth.Account{account},
+		Active:           account,
+		HasAccount:       true,
+		Instances:        instances,
+		Selected:         "sebsmodpack5",
+		Content:          content,
+		ContentFor:       "sebsmodpack5",
+		ProfileInstalled: true,
 		Editing: instance.Meta{
 			Name:             "sebsmodpack5",
 			MinecraftVersion: "1.21.1",
@@ -198,6 +200,30 @@ func TestRenderScreens(t *testing.T) {
 	duplicateDialog := func(u *ui) { u.dialogs.openCreate(demoSnapshot(), "sebsmodpack5") }
 	deleteDialog := func(u *ui) { u.dialogs.openDelete(demoSnapshot().Instances[1]) }
 	filtered := func(u *ui) { u.bench.content[instance.ContentMods].filter.SetText("neoforge 1.21") }
+	pickerLoader := func(u *ui) {
+		u.dialogs.openCreate(demoSnapshot(), "")
+		u.dialogs.pickLoaderVersion(u, instance.LoaderNeoForge, "1.21.1", "21.1.248", func(string) {})
+	}
+	pickerFetching := func(u *ui) {
+		u.dialogs.openCreate(demoSnapshot(), "")
+		u.dialogs.pickLoaderVersion(u, instance.LoaderForge, "1.20.1", "", func(string) {})
+	}
+
+	withVersions := demoSnapshot()
+	withVersions.LoaderVersions = map[string][]loader.Version{
+		launcher.VersionsKey(instance.LoaderNeoForge, "1.21.1"): {
+			{Version: "21.1.250", Stable: true}, {Version: "21.1.249-beta"}, {Version: "21.1.248", Stable: true},
+			{Version: "21.1.247", Stable: true}, {Version: "21.1.246", Stable: true}, {Version: "21.1.209", Stable: true},
+		},
+	}
+	fetching := demoSnapshot()
+	fetching.VersionsPending = map[string]bool{launcher.VersionsKey(instance.LoaderForge, "1.20.1"): true}
+
+	notInstalled := demoSnapshot()
+	notInstalled.ProfileInstalled = false
+	installing := notInstalled
+	installing.Task = launcher.Task{ID: 3, Kind: launcher.TaskInstall, Label: "Installing NeoForge 21.1.248",
+		Phase: "Installing NeoForge 21.1.248", Message: "Processor: net.minecraftforge:binarypatcher", Started: time.Now()}
 
 	cases := []struct {
 		name  string
@@ -211,6 +237,10 @@ func TestRenderScreens(t *testing.T) {
 		{"worlds", demoSnapshot(), worldsTab},
 		{"instance-settings", demoSnapshot(), instanceSettings},
 		{"dialog-create", demoSnapshot(), createDialog},
+		{"picker-loader", withVersions, pickerLoader},
+		{"picker-fetching", fetching, pickerFetching},
+		{"not-installed", notInstalled, instanceSettings},
+		{"installing", installing, nil},
 		{"dialog-duplicate", demoSnapshot(), duplicateDialog},
 		{"dialog-delete", demoSnapshot(), deleteDialog},
 		{"launching", launching, nil},

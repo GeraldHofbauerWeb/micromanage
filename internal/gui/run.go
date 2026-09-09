@@ -325,7 +325,13 @@ func (u *ui) layoutStatusBar(gtx layout.Context, snap launcher.Snapshot) layout.
 							}),
 						)
 					case taskActive(snap.Task):
-						return th.text(gtx, snap.Task.Label+" · "+taskDetail(snap.Task), sizeSmall, 0, th.P.TextMid)
+						line := snap.Task.Label
+						if detail := taskDetail(snap.Task); detail != "" && !strings.HasPrefix(detail, snap.Task.Label) {
+							line += " · " + detail
+						} else if detail != "" {
+							line = detail
+						}
+						return th.text(gtx, line, sizeSmall, 0, th.P.TextMid)
 					case snap.Status != "":
 						return th.text(gtx, snap.Status, sizeSmall, 0, th.P.TextMid)
 					default:
