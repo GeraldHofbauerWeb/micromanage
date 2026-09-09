@@ -33,8 +33,10 @@ jobs:
         # The runner image ships a Google Chrome apt source that breaks
         # apt-get update whenever Google's index is mid-rollover. Nothing
         # here needs it.
-        sudo rm -f /etc/apt/sources.list.d/google-chrome*.list
-        sudo apt-get update
+        sudo rm -f /etc/apt/sources.list.d/*google* /etc/apt/sources.list.d/*chrome*
+        # A third-party index that still fails must not block the Ubuntu
+        # packages this actually installs.
+        sudo apt-get update || true
         sudo apt-get install -y --no-install-recommends \
           gcc pkg-config libwayland-dev libx11-dev libx11-xcb-dev \
           libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev \
@@ -139,8 +141,10 @@ jobs:
         # The runner image ships a Google Chrome apt source that breaks
         # apt-get update whenever Google's index is mid-rollover. Nothing
         # here needs it.
-        sudo rm -f /etc/apt/sources.list.d/google-chrome*.list
-        sudo apt-get update
+        sudo rm -f /etc/apt/sources.list.d/*google* /etc/apt/sources.list.d/*chrome*
+        # A third-party index that still fails must not block the Ubuntu
+        # packages this actually installs.
+        sudo apt-get update || true
         sudo apt-get install -y --no-install-recommends \
           gcc pkg-config libwayland-dev libx11-dev libx11-xcb-dev \
           libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev \
