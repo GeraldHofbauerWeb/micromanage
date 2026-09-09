@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -46,6 +47,11 @@ func (r Runtime) String() string {
 // installation cannot stall startup.
 const probeTimeout = 3 * time.Second
 
+// probeParallelism bounds how many JVMs are asked for their version at once.
+// The query is short-lived, so a handful in flight finishes a cold scan in
+// about the time one used to take, without turning startup into a fork storm.
+const probeParallelism = 6
+
 // Detector finds Java runtimes.
 type Detector struct {
 	// SharedRuntimes is the managed runtime directory in the shared store.
@@ -53,6 +59,22 @@ type Detector struct {
 	// ExtraRoots are additional directories to scan for Mojang-style runtime
 	// trees — in practice the instances, each of which carries its own.
 	ExtraRoots []string
+	// CachePath is where probe results persist between runs. Empty means
+	// every runtime is asked for its version on every Detect.
+	CachePath string
+	// Rescan ignores the cache for one detection, for when a runtime is
+	// suspected of having changed without its file changing.
+	Rescan bool
+}
+
+// NewDetector wires a detector against the shared store: its managed
+// runtimes, its cache directory, and the instance directories to look inside.
+func NewDetector(sharedRuntimes, cacheDir string, instanceRoots []string) *Detector {
+	d := &Detector{SharedRuntimes: sharedRuntimes, ExtraRoots: instanceRoots}
+	if cacheDir != "" {
+		d.CachePath = filepath.Join(cacheDir, CacheFileName)
+	}
+	return d
 }
 
 // Detect returns every usable runtime, best first, plus any that are present
@@ -61,6 +83,9 @@ type Detector struct {
 // Order matters: harvested Mojang runtimes come first because they are the
 // ones a version's javaVersion actually names, and on a machine with only a
 // newer system JDK they may be the only correct choice.
+//
+// Runtimes already known to the cache are not executed again; the rest are
+// probed concurrently.
 func (d *Detector) Detect(ctx context.Context) []Runtime {
 	var candidates []probe
 
@@ -71,8 +96,23 @@ func (d *Detector) Detect(ctx context.Context) []Runtime {
 	candidates = append(candidates, environmentCandidates()...)
 	candidates = append(candidates, platformCandidates()...)
 
+	cache := loadProbeCache(d.CachePath)
+	if d.Rescan {
+		cache.entries = map[string]cacheEntry{}
+	}
+
+	// Resolve and deduplicate first, so the same JDK reached through two
+	// paths is probed once, then split into what the cache answers and what
+	// has to be asked.
+	type slot struct {
+		probe probe
+		key   string
+		id    identity
+		rt    Runtime
+		known bool
+	}
 	seen := make(map[string]bool)
-	var out []Runtime
+	var slots []*slot
 
 	for _, c := range candidates {
 		real := resolvePath(c.path)
@@ -81,11 +121,44 @@ func (d *Detector) Detect(ctx context.Context) []Runtime {
 		}
 		seen[real] = true
 
-		rt := probeRuntime(ctx, c)
-		if rt.Path == "" {
+		info, err := os.Stat(c.path)
+		if err != nil || info.IsDir() {
 			continue
 		}
-		out = append(out, rt)
+		sl := &slot{probe: c, key: real, id: identityOf(info)}
+		if e, ok := cache.lookup(real, sl.id); ok {
+			sl.rt = runtimeFromEntry(c, e)
+			sl.known = true
+		}
+		slots = append(slots, sl)
+	}
+
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, probeParallelism)
+	for _, sl := range slots {
+		if sl.known {
+			continue
+		}
+		wg.Add(1)
+		go func(sl *slot) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			sl.rt = probeRuntime(ctx, sl.probe)
+			if sl.rt.Path != "" {
+				cache.remember(sl.key, sl.id, sl.rt)
+			}
+		}(sl)
+	}
+	wg.Wait()
+	cache.save(seen)
+
+	var out []Runtime
+	for _, sl := range slots {
+		if sl.rt.Path == "" {
+			continue
+		}
+		out = append(out, sl.rt)
 	}
 
 	// Usable runtimes first, then by descending major version.
@@ -96,6 +169,22 @@ func (d *Detector) Detect(ctx context.Context) []Runtime {
 		return out[i].Major > out[j].Major
 	})
 	return out
+}
+
+// runtimeFromEntry rebuilds a Runtime from a cached probe. Where it was found
+// is not cached: the same file is reported under whichever source asked.
+func runtimeFromEntry(c probe, e cacheEntry) Runtime {
+	return Runtime{
+		Path:        c.path,
+		Major:       e.Major,
+		FullVersion: e.FullVersion,
+		Vendor:      e.Vendor,
+		Source:      c.source,
+		Component:   c.component,
+		Managed:     c.managed,
+		Broken:      e.Broken,
+		Reason:      e.Reason,
+	}
 }
 
 // probe is a candidate before it has been interrogated.

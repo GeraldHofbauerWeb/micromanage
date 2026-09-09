@@ -258,6 +258,10 @@ func (c *Controller) run(ctx context.Context, id TaskID, a Action) {
 	}
 }
 
+// doRefresh reloads everything the window shows. It publishes in two steps:
+// the instance list is a few directory reads and appears at once, while the
+// Java scan may have to fork a JVM per runtime and follows when it is done.
+// Nobody should look at an empty window because a runtime was slow to answer.
 func (c *Controller) doRefresh(ctx context.Context) {
 	instances, err := c.Manager.ListInstances()
 	if err != nil {
@@ -265,19 +269,11 @@ func (c *Controller) doRefresh(ctx context.Context) {
 		return
 	}
 
-	roots := make([]string, 0, len(instances))
-	for _, inst := range instances {
-		roots = append(roots, inst.Path)
-	}
-	detector := &java.Detector{SharedRuntimes: c.Layout.Runtimes(), ExtraRoots: roots}
-	runtimes := detector.Detect(ctx)
-
 	accounts, active := c.Accounts.List()
 	config := c.Manager.GetConfig()
 
 	c.emit(Event{Terminal: true, Apply: func(s *Store) {
 		s.SetInstances(instances)
-		s.SetRuntimes(runtimes)
 		s.SetAccounts(accounts, active)
 		s.SetConfig(config)
 		s.SetMSAConfigured(c.MSAConfigured())
@@ -287,6 +283,21 @@ func (c *Controller) doRefresh(ctx context.Context) {
 			s.SetScreen(ScreenLogin)
 		}
 	}})
+
+	runtimes := c.detector(instances).Detect(ctx)
+	c.emit(Event{Terminal: true, Apply: func(s *Store) {
+		s.SetRuntimes(runtimes)
+	}})
+}
+
+// detector builds a Java detector over the store and the given instances,
+// sharing the probe cache so a runtime is only ever asked once.
+func (c *Controller) detector(instances []instance.Instance) *java.Detector {
+	roots := make([]string, 0, len(instances))
+	for _, inst := range instances {
+		roots = append(roots, inst.Path)
+	}
+	return java.NewDetector(c.Layout.Runtimes(), c.Layout.Cache(), roots)
 }
 
 func (c *Controller) doSelect(name string) {
@@ -639,6 +650,7 @@ func (c *Controller) doHarvest(ctx context.Context, id TaskID) {
 
 // doLaunch runs the whole path from an instance to a running game.
 func (c *Controller) doLaunch(ctx context.Context, id TaskID, name string) {
+	started := time.Now()
 	c.beginTask(id, TaskLaunch, "Launching "+name)
 
 	account, ok := c.Accounts.Active()
@@ -729,7 +741,7 @@ func (c *Controller) doLaunch(ctx context.Context, id TaskID, name string) {
 		LauncherVer:   c.Version,
 		MinMB:         minMB,
 		MaxMB:         maxMB,
-		ExtraJVMArgs:  meta.JVMArgs,
+		ExtraJVMArgs:  launch.JVMArgsFor(meta.JVMArgs),
 		ExtraGameArgs: meta.GameArgs,
 	}, prep.Platform)
 
@@ -751,6 +763,7 @@ func (c *Controller) doLaunch(ctx context.Context, id TaskID, name string) {
 	c.game = proc
 	c.mu.Unlock()
 
+	elapsed := time.Since(started)
 	c.emit(Event{Terminal: true, Apply: func(s *Store) {
 		s.SetGame(GameState{
 			Instance: name,
@@ -759,6 +772,7 @@ func (c *Controller) doLaunch(ctx context.Context, id TaskID, name string) {
 			Started:  proc.Started,
 			Running:  true,
 		})
+		s.SetStatus(fmt.Sprintf("%s handed to Java in %s", name, formatElapsed(elapsed)))
 	}})
 	c.finishTask(id, nil)
 
@@ -817,17 +831,13 @@ func (c *Controller) step(id TaskID, label string) {
 }
 
 // selectJava resolves the runtime for a prepared version.
+//
+// The runtimes found by the last refresh are tried first: they are what the
+// settings screen shows, and a launch should not have to rediscover them.
+// Only when none of them fits is the machine scanned again, in case one was
+// installed since.
 func (c *Controller) selectJava(ctx context.Context, prepared *launch.Prepared,
 	meta instance.Meta, loader instance.LoaderSpec) (java.Selection, error) {
-
-	instances, err := c.Manager.ListInstances()
-	if err != nil {
-		return java.Selection{}, err
-	}
-	roots := make([]string, 0, len(instances))
-	for _, inst := range instances {
-		roots = append(roots, inst.Path)
-	}
 
 	var req java.Requirement
 	if jv := prepared.Version.JavaVersion; jv != nil {
@@ -838,8 +848,32 @@ func (c *Controller) selectJava(ctx context.Context, prepared *launch.Prepared,
 		req.Strict = true
 	}
 
-	detector := &java.Detector{SharedRuntimes: c.Layout.Runtimes(), ExtraRoots: roots}
-	return detector.Resolve(ctx, req, meta.Java.Path)
+	instances, err := c.Manager.ListInstances()
+	if err != nil {
+		return java.Selection{}, err
+	}
+	detector := c.detector(instances)
+
+	if meta.Java.Path != "" {
+		return detector.Resolve(ctx, req, meta.Java.Path)
+	}
+	if known := c.store.Snapshot().Runtimes; len(known) > 0 {
+		if sel, err := java.Select(known, req); err == nil {
+			return sel, nil
+		}
+	}
+
+	runtimes := detector.Detect(ctx)
+	c.emit(Event{Terminal: true, Apply: func(s *Store) { s.SetRuntimes(runtimes) }})
+	return java.Select(runtimes, req)
+}
+
+// formatElapsed renders a launch duration at the precision it deserves.
+func formatElapsed(d time.Duration) string {
+	if d < time.Second {
+		return fmt.Sprintf("%d ms", d.Milliseconds())
+	}
+	return fmt.Sprintf("%.1f s", d.Seconds())
 }
 
 // versionIDFor works out which version id to launch for a loader choice.

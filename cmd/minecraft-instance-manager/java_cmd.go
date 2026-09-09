@@ -13,7 +13,11 @@ import (
 func init() {
 	rootCmd.AddCommand(javaCmd)
 	javaCmd.AddCommand(javaListCmd)
+	javaListCmd.Flags().BoolVar(&javaRescan, "rescan", false,
+		"ask every runtime for its version again instead of trusting the cache")
 }
+
+var javaRescan bool
 
 var javaCmd = &cobra.Command{
 	Use:   "java",
@@ -44,7 +48,8 @@ are often the only ones matching what a version actually asks for.`,
 		}
 
 		layout := launch.NewLayout(manager.AppDir)
-		d := &java.Detector{SharedRuntimes: layout.Runtimes(), ExtraRoots: roots}
+		d := java.NewDetector(layout.Runtimes(), layout.Cache(), roots)
+		d.Rescan = javaRescan
 		runtimes := d.Detect(cmd.Context())
 
 		if len(runtimes) == 0 {

@@ -34,6 +34,29 @@ type Options struct {
 	QuickPlayServer string
 }
 
+// DefaultJVMArgs are the garbage-collector settings the official launcher
+// gives every profile. An instance detected from one carries them already;
+// one created here would otherwise run on the JVM's own defaults, whose
+// longer pauses show up in-game as stutter.
+var DefaultJVMArgs = []string{
+	"-XX:+UnlockExperimentalVMOptions",
+	"-XX:+UseG1GC",
+	"-XX:G1NewSizePercent=20",
+	"-XX:G1ReservePercent=20",
+	"-XX:MaxGCPauseMillis=50",
+	"-XX:G1HeapRegionSize=32M",
+}
+
+// JVMArgsFor returns an instance's own JVM flags, or the defaults when it has
+// none. A configured empty list is indistinguishable from none, which is
+// fine: nobody wants a stock JVM for Minecraft.
+func JVMArgsFor(own []string) []string {
+	if len(own) > 0 {
+		return own
+	}
+	return append([]string(nil), DefaultJVMArgs...)
+}
+
 // placeholders builds the substitution table applied to both argument lists.
 func placeholders(p *Prepared, o Options) map[string]string {
 	assetsRoot := p.AssetsDir

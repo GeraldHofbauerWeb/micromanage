@@ -124,7 +124,7 @@ shared store and downloaded if missing.`,
 			LauncherVer:     Version,
 			MinMB:           minMB,
 			MaxMB:           maxMB,
-			ExtraJVMArgs:    meta.JVMArgs,
+			ExtraJVMArgs:    launch.JVMArgsFor(meta.JVMArgs),
 			ExtraGameArgs:   meta.GameArgs,
 			QuickPlayServer: launchServer,
 		}
@@ -218,7 +218,7 @@ func selectJava(cmd *cobra.Command, manager *instance.Manager, layout *launch.La
 		roots = append(roots, inst.Path)
 	}
 
-	detector := &java.Detector{SharedRuntimes: layout.Runtimes(), ExtraRoots: roots}
+	detector := java.NewDetector(layout.Runtimes(), layout.Cache(), roots)
 
 	var req java.Requirement
 	if jv := prepared.Version.JavaVersion; jv != nil {
