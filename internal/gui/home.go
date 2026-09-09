@@ -56,7 +56,7 @@ type railState struct {
 type railRow struct {
 	click widget.Clickable
 	more  widget.Clickable
-	tag   struct{}
+	tag   byte
 }
 
 func newRail() railState { return railState{list: newList()} }

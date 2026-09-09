@@ -37,8 +37,10 @@ type contextMenu struct {
 
 	// scrim and panel are the pointer tags of the two areas: everything
 	// outside the panel closes the menu; the panel swallows what lands in
-	// its padding so the scrim never sees it.
-	scrim, panel struct{}
+	// its padding so the scrim never sees it. They are bytes rather than
+	// empty structs because Go gives adjacent zero-size fields the same
+	// address, and a tag is its address.
+	scrim, panel byte
 }
 
 // menuWidth is the panel's width; long labels wrap rather than widen it.
@@ -93,10 +95,13 @@ func (m *contextMenu) Layout(gtx layout.Context, u *ui) layout.Dimensions {
 		}
 	}
 
-	// The scrim: the whole window, registered first so the panel drawn
-	// after it takes precedence where they overlap.
-	defer clip.Rect{Max: gtx.Constraints.Max}.Push(gtx.Ops).Pop()
+	// The scrim: the whole window. Its area is closed again at once so
+	// the panel is a sibling rather than a child — Gio hands a press to a
+	// handler's ancestors as well, and a scrim that were an ancestor would
+	// close the menu on the press that starts every click inside it.
+	scrim := clip.Rect{Max: gtx.Constraints.Max}.Push(gtx.Ops)
 	event.Op(gtx.Ops, &m.scrim)
+	scrim.Pop()
 
 	// Measure the panel, then place it so it stays inside the window: to
 	// the left of the pointer when there is no room on the right, above it

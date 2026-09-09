@@ -170,7 +170,7 @@ type ui struct {
 	// right-click knows only its own row; the menu it opens has to be
 	// placed in the window.
 	pointer    image.Point
-	pointerTag struct{}
+	pointerTag byte
 }
 
 func newUI(ctrl *launcher.Controller) *ui {
