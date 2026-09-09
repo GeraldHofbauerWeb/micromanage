@@ -3,6 +3,7 @@ package gui
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"os"
 	"strings"
 	"time"
@@ -156,7 +157,7 @@ type ui struct {
 	version string
 
 	// top bar
-	home, refresh, settings, account widget.Clickable
+	home, brand, refresh, settings, account widget.Clickable
 
 	rail      railState
 	bench     workbench
@@ -196,6 +197,19 @@ func (u *ui) Layout(gtx layout.Context) layout.Dimensions {
 	return u.layoutSnapshot(gtx, u.ctrl.Store().Snapshot())
 }
 
+// goHome returns to the start screen: the instance list with nothing
+// selected.
+func (u *ui) goHome(snap launcher.Snapshot) {
+	if u.ctrl == nil {
+		return
+	}
+	u.ctrl.Store().SetScreen(launcher.ScreenInstances)
+	if snap.Selected != "" {
+		u.ctrl.Store().SetSelected("")
+		u.ctrl.Store().SetContent("", nil)
+	}
+}
+
 // dispatch hands an action to the controller. The offscreen renderer has
 // none, and a menu item pressed there should do nothing rather than crash.
 func (u *ui) dispatch(a launcher.Action) {
@@ -231,6 +245,9 @@ func (u *ui) layoutSnapshot(gtx layout.Context, snap launcher.Snapshot) layout.D
 	// Bar clicks are read before layout so the frame already reflects them.
 	if u.home.Clicked(gtx) {
 		u.ctrl.Store().SetScreen(launcher.ScreenInstances)
+	}
+	if u.brand.Clicked(gtx) {
+		u.goHome(snap)
 	}
 	if u.settings.Clicked(gtx) {
 		u.ctrl.Store().SetScreen(launcher.ScreenSettings)
@@ -284,13 +301,26 @@ func (u *ui) layoutTopBar(gtx layout.Context, snap launcher.Snapshot) layout.Dim
 			gtx.Constraints.Min.X = gtx.Constraints.Max.X
 			return row(gtx, sp2,
 				rigid(func(gtx layout.Context) layout.Dimensions {
-					if snap.Screen == launcher.ScreenInstances {
-						return row(gtx, unit.Dp(10),
-							rigid(func(gtx layout.Context) layout.Dimensions { return slab(gtx, th.P.Sky, unit.Dp(20)) }),
-							rigid(func(gtx layout.Context) layout.Dimensions { return th.brand(gtx, "Instance Manager", th.P.Text) }),
-						)
+					if snap.Screen != launcher.ScreenInstances {
+						return th.ghost(gtx, &u.home, u.ic.Back, "Instances")
 					}
-					return th.ghost(gtx, &u.home, u.ic.Back, "Instances")
+					// The mark and the wordmark are the way home: back to the
+					// start screen with nothing selected.
+					bg := color.NRGBA{}
+					if u.brand.Hovered() {
+						bg = th.P.Hover
+					}
+					return pressable(gtx, &u.brand, func(gtx layout.Context) layout.Dimensions {
+						return fill(gtx, bg, unit.Dp(6), func(gtx layout.Context) layout.Dimensions {
+							return layout.Inset{Top: unit.Dp(4), Bottom: unit.Dp(4), Left: unit.Dp(6), Right: unit.Dp(10)}.Layout(gtx,
+								func(gtx layout.Context) layout.Dimensions {
+									return row(gtx, unit.Dp(10),
+										rigid(func(gtx layout.Context) layout.Dimensions { return slab(gtx, th.P.Sky, unit.Dp(20)) }),
+										rigid(func(gtx layout.Context) layout.Dimensions { return th.brand(gtx, "Instance Manager", th.P.Text) }),
+									)
+								})
+						})
+					})
 				}),
 				flexFill(),
 				rigid(func(gtx layout.Context) layout.Dimensions { return u.iconButton(gtx, &u.refresh, u.ic.Refresh) }),

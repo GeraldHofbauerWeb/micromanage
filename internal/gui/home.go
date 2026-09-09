@@ -418,7 +418,10 @@ func (w *workbench) layoutEmpty(gtx layout.Context, u *ui, snap launcher.Snapsho
 				case len(snap.Instances) == 0:
 					return th.mid(gtx, "Make your first instance to get started.")
 				}
-				return th.mid(gtx, "Pick an instance on the left, or right-click one.")
+				if active.Name != "" && active.Configured && snap.HasAccount && !running {
+					return th.mid(gtx, "Pick an instance on the left, or play "+active.Name+".")
+				}
+				return th.mid(gtx, "Pick an instance on the left.")
 			}),
 			spacer(sp4),
 			rigid(func(gtx layout.Context) layout.Dimensions {
