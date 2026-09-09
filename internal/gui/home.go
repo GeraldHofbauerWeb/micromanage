@@ -304,6 +304,8 @@ type workbench struct {
 	content  map[instance.ContentKind]*kindState
 	settings instanceSettings
 	overview overview
+	// stats is the playtime summary the start screen carries.
+	stats statsPanel
 
 	// shownFor is the instance the tab was chosen for; a new selection
 	// returns to the overview.
@@ -383,6 +385,18 @@ func (w *workbench) layoutEmpty(gtx layout.Context, u *ui, snap launcher.Snapsho
 	}
 	adopting := taskActive(snap.Task) && snap.Task.Kind == launcher.TaskAdopt
 
+	// The summary only appears when there is room under the hero for it,
+	// and its chart only when there is room for that too: a short window
+	// keeps the icon and the one button instead.
+	showStats := snap.Stats.Played() && len(snap.Instances) > 0 && gtx.Constraints.Max.Y >= gtx.Dp(unit.Dp(540))
+	compactStats := gtx.Constraints.Max.Y < gtx.Dp(unit.Dp(640))
+	// With the summary under it the hero gives up some of its air; on its
+	// own it keeps the mark at the size the icon was drawn for.
+	markSize, heroGap := unit.Dp(132), sp4
+	if showStats {
+		markSize, heroGap = unit.Dp(96), sp3
+	}
+
 	var active instance.Instance
 	for _, inst := range snap.Instances {
 		if inst.IsActive {
@@ -401,8 +415,8 @@ func (w *workbench) layoutEmpty(gtx layout.Context, u *ui, snap launcher.Snapsho
 
 	return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx,
-			rigid(func(gtx layout.Context) layout.Dimensions { return mark(gtx, unit.Dp(132)) }),
-			spacer(sp4),
+			rigid(func(gtx layout.Context) layout.Dimensions { return mark(gtx, markSize) }),
+			spacer(heroGap),
 			rigid(func(gtx layout.Context) layout.Dimensions {
 				l := material.Label(th.Theme, unit.Sp(32), "Instance Manager")
 				l.Font.Typeface = faceDisplay
@@ -423,7 +437,7 @@ func (w *workbench) layoutEmpty(gtx layout.Context, u *ui, snap launcher.Snapsho
 				}
 				return th.mid(gtx, "Pick an instance on the left.")
 			}),
-			spacer(sp4),
+			spacer(heroGap),
 			rigid(func(gtx layout.Context) layout.Dimensions {
 				// The one thing to do next: make an instance, or play the
 				// active one — the same instance the official launcher
@@ -456,6 +470,13 @@ func (w *workbench) layoutEmpty(gtx layout.Context, u *ui, snap launcher.Snapsho
 					line += " · " + active.Name + " is active"
 				}
 				return th.monoIn(gtx, line, th.P.TextDim)
+			}),
+			spacer(heroGap),
+			rigid(func(gtx layout.Context) layout.Dimensions {
+				if !showStats {
+					return layout.Dimensions{}
+				}
+				return w.stats.Layout(gtx, u, snap, compactStats)
 			}),
 		)
 	})

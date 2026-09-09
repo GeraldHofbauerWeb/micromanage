@@ -245,15 +245,9 @@ func lineEcho(enabled bool) func(string) {
 	return func(line string) { fmt.Fprintln(os.Stderr, line) }
 }
 
-// recordPlaytime updates the instance's play statistics, best-effort.
+// recordPlaytime books the finished session, best-effort.
 func recordPlaytime(manager *instance.Manager, name string, started time.Time) {
-	meta, err := manager.GetMeta(name)
-	if err != nil {
-		return
-	}
-	meta.LastPlayed = started.UTC()
-	meta.TotalPlaySeconds += int64(time.Since(started).Seconds())
-	_ = manager.SetMeta(name, meta)
+	_, _ = manager.RecordPlaySession(name, started, time.Now())
 }
 
 // quoteIfNeeded makes a dry-run command line copy-pasteable.

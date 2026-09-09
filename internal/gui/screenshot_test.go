@@ -142,7 +142,49 @@ func demoSnapshot() launcher.Snapshot {
 			"backup-path":    "/home/gerry/.config/minecraft-instance/backup",
 		},
 		Status: "6 instances",
+		Stats:  demoStats(now),
 	}
+}
+
+// demoStats is a fortnight of playing, with one long weekend, so the panel
+// is rendered against a chart that actually varies.
+func demoStats(now time.Time) instance.PlayStats {
+	play := func(name string, loader instance.LoaderType, hours float64, sessions int, days float64) instance.InstancePlay {
+		return instance.InstancePlay{Name: name, Loader: instance.LoaderSpec{Type: loader},
+			Total:    time.Duration(hours * float64(time.Hour)),
+			Sessions: sessions, Last: now.Add(-time.Duration(days * float64(24*time.Hour)))}
+	}
+	stats := instance.PlayStats{
+		Sessions:  61,
+		Last:      now.Add(-4 * time.Minute),
+		First:     now.Add(-90 * 24 * time.Hour),
+		Longest:   5*time.Hour + 40*time.Minute,
+		LongestOn: "sebsmodpack5",
+		Instances: []instance.InstancePlay{
+			play("sebsmodpack5", instance.LoaderNeoForge, 92.5, 38, 0),
+			play("sebsmodpack4", instance.LoaderNeoForge, 41, 14, 12),
+			play("sebi-1.20.1", instance.LoaderForge, 12.25, 6, 30),
+			play("fabric-test", instance.LoaderFabric, 2, 2, 44),
+			play("vanilla", instance.LoaderVanilla, 0.75, 1, 51),
+		},
+	}
+	hours := []float64{0, 1.5, 0, 0, 3.25, 5.5, 4, 0, 0, 2, 1.25, 0, 3.75, 2.5}
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	for i, h := range hours {
+		day := today.AddDate(0, 0, -(len(hours) - 1 - i))
+		stats.Days = append(stats.Days, instance.DayPlay{Day: day, Total: time.Duration(h * float64(time.Hour))})
+	}
+	var busiest time.Duration
+	for _, p := range stats.Instances {
+		stats.Total += p.Total
+		if p.Total > busiest {
+			busiest = p.Total
+		}
+	}
+	for i := range stats.Instances {
+		stats.Instances[i].Share = float64(stats.Instances[i].Total) / float64(busiest)
+	}
+	return stats
 }
 
 // TestRenderScreens draws each screen offscreen. It is a smoke test as much as
@@ -169,6 +211,7 @@ func TestRenderScreens(t *testing.T) {
 	empty := demoSnapshot()
 	empty.Instances = nil
 	empty.Selected = ""
+	empty.Stats = instance.PlayStats{}
 
 	unselected := demoSnapshot()
 	unselected.Selected = ""
@@ -302,5 +345,12 @@ func TestRenderScreens(t *testing.T) {
 			t.Fatalf("%s produced no image", tc.name)
 		}
 		t.Logf("%-10s %s (%d bytes)", tc.name, path, info.Size())
+	}
+
+	// A short window drops the daily chart rather than pushing the panel
+	// off the bottom; render it too, so that path is exercised.
+	short := filepath.Join(dir, "unselected-short.png")
+	if err := Screenshot(short, 1180, 700, unselected, nil); err != nil {
+		t.Fatalf("rendering unselected-short: %v", err)
 	}
 }

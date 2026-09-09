@@ -132,8 +132,12 @@ type Meta struct {
 
 	LastPlayed       time.Time `json:"last_played,omitzero"`
 	TotalPlaySeconds int64     `json:"total_play_seconds,omitempty"`
-	Created          time.Time `json:"created,omitzero"`
-	Notes            string    `json:"notes,omitempty"`
+	// PlaySessions counts the runs behind that total. It has only been
+	// kept since the session log existed, so it can be short of the truth
+	// on an instance played before that.
+	PlaySessions int64     `json:"play_sessions,omitempty"`
+	Created      time.Time `json:"created,omitzero"`
+	Notes        string    `json:"notes,omitempty"`
 }
 
 // DefaultMeta returns the metadata an unconfigured instance is treated as

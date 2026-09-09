@@ -40,6 +40,10 @@ and all — from one window.
   filter. Switch a mod off without deleting it, open a config in your editor,
   show a file in the file manager, delete a world — or open the folder and
   do it your way.
+- **Counts the playing.** Every session is booked against the instance it was
+  played on, so the start screen can show the total, the last two weeks day by
+  day and which instance the time went into — and `stats` prints the same in a
+  terminal.
 - **Starts fast and stays out of the way.** Java runtimes are probed once and
   remembered; the window shows your instances before anything else happens,
   and a launch hands the game to Java in well under a second.
@@ -84,12 +88,13 @@ from the application menu.
    moved in as the instance *Default* — renamed rather than copied, and
    linked back — so the worlds, mods and settings already there are the
    first instance. The mark in the top-left corner leads back to the start
-   screen, which offers to play the active instance —
-   the one `.minecraft` points to, which the official launcher would start
-   too. Right-click an instance, or press its **⋯**, for Play, Set active,
-   Overview, Settings, its folder, Duplicate and Delete. The version
-   fields open a list — Minecraft releases from Mojang, loader builds from the
-   loader's own service — with a filter, and accept a typed version the list
+   screen, which offers to play the active instance — the one `.minecraft`
+   points to, which the official launcher would start too — and sums up the
+   playtime: the total, the last two weeks day by day, and how it splits
+   across the instances. Right-click an instance, or press its **⋯**, for
+   Play, Set active, Overview, Settings, its folder, Duplicate and Delete.
+   The version fields open a list — Minecraft releases from Mojang, loader
+   builds from the loader's own service — with a filter, and accept a typed version the list
    does not know yet. New instances are empty and instant; a loader is
    installed as part of creating one. Duplicating an existing instance copies
    its mods, configs and packs but not its worlds.
@@ -131,6 +136,7 @@ also how it is tested.
 | `options save <name> [label]` / `options restore <name> [snapshot]` | Keep a copy of the game options, or put one back (`latest` by default; the replaced file is kept) |
 | `options diff <name> [snapshot]` | The settings a restore would change |
 | `options edit <name>` / `options path <name>` | Open `options.txt` in `$EDITOR`, or print where it is |
+| `stats [--days N]` | Playtime across every instance: totals, sessions and the last two weeks day by day |
 | `instance detect [--all] [--write]` | Work out what an instance runs |
 | `instance show <name>` / `instance set <name> <key> <value>` | Read and change settings |
 | `launch <name>` | Launch as the signed-in account; `--offline <player>` overrides it, `--dry-run` prints the command line |

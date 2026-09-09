@@ -167,7 +167,11 @@ func (o *overview) layoutFacts(gtx layout.Context, u *ui, snap launcher.Snapshot
 		facts = append(facts, fact{"Last played", humaniseSince(meta.LastPlayed)})
 	}
 	if meta.TotalPlaySeconds > 0 {
-		facts = append(facts, fact{"Time played", formatPlaytime(time.Duration(meta.TotalPlaySeconds) * time.Second)})
+		played := formatPlaytime(time.Duration(meta.TotalPlaySeconds) * time.Second)
+		if meta.PlaySessions > 0 {
+			played += fmt.Sprintf("  (%d sessions)", meta.PlaySessions)
+		}
+		facts = append(facts, fact{"Time played", played})
 	}
 	if !meta.Created.IsZero() {
 		facts = append(facts, fact{"Created", meta.Created.Local().Format("2 Jan 2006")})

@@ -459,6 +459,8 @@ func (c *Controller) doRefresh(ctx context.Context) {
 		}
 	}})
 
+	c.refreshStats()
+
 	runtimes := c.detector(instances).Detect(ctx)
 	c.emit(Event{Terminal: true, Apply: func(s *Store) {
 		s.SetRuntimes(runtimes)
@@ -1324,12 +1326,38 @@ func (c *Controller) watchGame(name string, proc *launch.Process) {
 		})
 	}})
 
-	// Play statistics are best-effort; a failure here must not surface.
-	if meta, metaErr := c.Manager.GetMeta(name); metaErr == nil {
-		meta.LastPlayed = proc.Started.UTC()
-		meta.TotalPlaySeconds += int64(time.Since(proc.Started).Seconds())
-		_ = c.Manager.SetMeta(name, meta)
+	c.recordPlaytime(name, proc.Started, time.Now())
+}
+
+// recordPlaytime books the session that just ended and puts the new numbers
+// in front of the player straight away — the overview shows the instance's
+// playtime, and it would otherwise keep last night's figure until the next
+// start.
+//
+// Play statistics are best-effort; a failure here must not surface as an
+// error over a game that ran perfectly well.
+func (c *Controller) recordPlaytime(name string, start, end time.Time) {
+	meta, err := c.Manager.RecordPlaySession(name, start, end)
+	if err != nil {
+		return
 	}
+	selected := c.store.Snapshot().Selected
+	c.emit(Event{Terminal: true, Apply: func(s *Store) {
+		if selected == name {
+			s.SetEditing(meta, true)
+		}
+	}})
+	c.refreshInstances()
+	c.refreshStats()
+}
+
+// refreshStats republishes the playtime totals across all instances.
+func (c *Controller) refreshStats() {
+	stats, err := c.Manager.PlayStats(instance.DefaultStatsDays)
+	if err != nil {
+		return
+	}
+	c.emit(Event{Terminal: true, Apply: func(s *Store) { s.SetStats(stats) }})
 }
 
 // step records a finished phase on the current task.

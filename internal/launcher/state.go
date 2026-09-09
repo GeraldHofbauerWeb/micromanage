@@ -145,6 +145,10 @@ type Snapshot struct {
 	// lazily by a storage scan.
 	Reclaimable map[string]int64
 	StoreSize   int64
+
+	// Stats is the playtime across every instance, refreshed on every
+	// refresh and as soon as a game exits.
+	Stats instance.PlayStats
 }
 
 // Store holds the application state. It is written by the pump goroutine and
@@ -185,6 +189,7 @@ type Store struct {
 	err         error
 	reclaimable map[string]int64
 	storeSize   int64
+	stats       instance.PlayStats
 }
 
 // NewStore returns an empty store.
@@ -229,7 +234,10 @@ func (s *Store) Snapshot() Snapshot {
 		Err:              s.err,
 		Reclaimable:      make(map[string]int64, len(s.reclaimable)),
 		StoreSize:        s.storeSize,
+		Stats:            s.stats,
 	}
+	snap.Stats.Instances = append([]instance.InstancePlay(nil), s.stats.Instances...)
+	snap.Stats.Days = append([]instance.DayPlay(nil), s.stats.Days...)
 	snap.Task.Steps = append([]string(nil), s.task.Steps...)
 	snap.Game.Tail = append([]string(nil), s.game.Tail...)
 	for k, v := range s.config {
@@ -449,6 +457,13 @@ func (s *Store) SetStoreSize(size int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.storeSize = size
+}
+
+// SetStats publishes the playtime totals.
+func (s *Store) SetStats(stats instance.PlayStats) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.stats = stats
 }
 
 // SelectedInstance returns the selected instance from a snapshot.
