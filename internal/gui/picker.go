@@ -108,12 +108,12 @@ func (p *picker) options(snap launcher.Snapshot) (opts []pickerOption, pending b
 		key := launcher.VersionsKey(p.kind, p.mc)
 		pending = snap.VersionsPending[key]
 		for i, v := range snap.LoaderVersions[key] {
-			detail := ""
+			detail := "for " + p.mc
 			switch {
 			case !v.Stable:
-				detail = "pre-release"
+				detail = "pre-release · " + detail
 			case i == 0:
-				detail = "latest"
+				detail = "latest · " + detail
 			}
 			opts = append(opts, pickerOption{value: v.Version, detail: detail, dim: !v.Stable})
 		}

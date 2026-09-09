@@ -75,6 +75,19 @@ func (k ContentKind) Label() string {
 	return string(k)
 }
 
+// Short is a name that fits a tab; Label is for anywhere with room.
+func (k ContentKind) Short() string {
+	switch k {
+	case ContentResourcePacks:
+		return "Resources"
+	case ContentShaderPacks:
+		return "Shaders"
+	case ContentCrashReports:
+		return "Crashes"
+	}
+	return k.Label()
+}
+
 // Recursive reports whether the kind's directory is listed as a tree. Mod
 // configuration is the one case: mods nest their files in subdirectories,
 // and a player looking for one wants a flat, searchable list of paths.
@@ -111,6 +124,20 @@ type Entry struct {
 	IsDir   bool
 	// Disabled reports a mod carrying DisabledSuffix.
 	Disabled bool
+	// Title is the name a mod gives itself in its manifest, filled in by
+	// whoever reads jars; empty means the file name is all there is.
+	Title string
+	// Version is the mod's own version, when its manifest states one.
+	Version string
+}
+
+// Label is the best name to show: the manifest's title, else the file name
+// without the disabled marker.
+func (e Entry) Label() string {
+	if e.Title != "" {
+		return e.Title
+	}
+	return e.DisplayName()
 }
 
 // DisplayName is the name without the disabled marker.

@@ -59,6 +59,10 @@ func demoSnapshot() launcher.Snapshot {
 		return instance.Entry{Name: full, Path: "/home/gerry/.minecraft-instances/sebsmodpack5/mods/" + full,
 			Size: int64(mb * 1024 * 1024), ModTime: now.Add(-time.Duration(days) * 24 * time.Hour), Disabled: off}
 	}
+	titled := func(e instance.Entry, title, version string) instance.Entry {
+		e.Title, e.Version = title, version
+		return e
+	}
 	content := map[instance.ContentKind][]instance.Entry{
 		instance.ContentMods: {
 			mod("AmbientSounds_NEOFORGE_v6.1.4_mc1.21.1.jar", 1.9, 12, false),
@@ -66,11 +70,11 @@ func demoSnapshot() launcher.Snapshot {
 			mod("architectury-13.0.8-neoforge.jar", 0.6, 30, false),
 			mod("balm-neoforge-1.21.1-21.0.47.jar", 0.4, 9, false),
 			mod("BetterF3-11.0.3-NeoForge-1.21.1.jar", 0.3, 40, true),
-			mod("create-1.21.1-6.0.6.jar", 24.8, 3, false),
-			mod("CreativeCore_NEOFORGE_v2.12.30_mc1.21.1.jar", 1.2, 12, false),
-			mod("curios-neoforge-9.5.1+1.21.1.jar", 0.5, 30, false),
+			titled(mod("create-1.21.1-6.0.6.jar", 24.8, 3, false), "Create", "6.0.6"),
+			titled(mod("CreativeCore_NEOFORGE_v2.12.30_mc1.21.1.jar", 1.2, 12, false), "CreativeCore", "2.12.30"),
+			titled(mod("curios-neoforge-9.5.1+1.21.1.jar", 0.5, 30, false), "Curios API", "9.5.1+1.21.1"),
 			mod("EnchantmentDescriptions-NeoForge-1.21.1-21.1.6.jar", 0.1, 60, false),
-			mod("jei-1.21.1-neoforge-19.22.1.318.jar", 1.4, 5, false),
+			titled(mod("jei-1.21.1-neoforge-19.22.1.318.jar", 1.4, 5, false), "Just Enough Items", "19.22.1.318"),
 			mod("modernfix-neoforge-5.24.0+mc1.21.1.jar", 0.9, 5, false),
 			mod("sodium-neoforge-0.6.13+mc1.21.1.jar", 1.1, 5, true),
 			mod("supplementaries-1.21.1-3.1.28-beta.jar", 9.7, 20, false),
@@ -190,16 +194,19 @@ func TestRenderScreens(t *testing.T) {
 	}
 
 	// Interface states that live in widgets rather than in the snapshot.
-	configTab := func(u *ui) { u.bench.tab = 1 }
-	worldsTab := func(u *ui) { u.bench.tab = 2 }
-	instanceSettings := func(u *ui) { u.bench.tab = len(benchTabs()) - 1 }
+	overviewTab := func(u *ui) { u.bench.shownFor = "sebsmodpack5"; u.bench.tab = 0 }
+	modsTab := func(u *ui) { u.bench.shownFor = "sebsmodpack5"; u.bench.tab = 1 }
+	configTab := func(u *ui) { u.bench.shownFor = "sebsmodpack5"; u.bench.tab = 2 }
+	worldsTab := func(u *ui) { u.bench.shownFor = "sebsmodpack5"; u.bench.tab = 3 }
+	instanceSettings := func(u *ui) { u.bench.shownFor = "sebsmodpack5"; u.bench.tab = len(benchTabs()) - 1 }
 	confirmDelete := func(u *ui) {
+		modsTab(u)
 		u.bench.content[instance.ContentMods].confirming = "create-1.21.1-6.0.6.jar"
 	}
 	createDialog := func(u *ui) { u.dialogs.openCreate(demoSnapshot(), "") }
 	duplicateDialog := func(u *ui) { u.dialogs.openCreate(demoSnapshot(), "sebsmodpack5") }
 	deleteDialog := func(u *ui) { u.dialogs.openDelete(demoSnapshot().Instances[1]) }
-	filtered := func(u *ui) { u.bench.content[instance.ContentMods].filter.SetText("neoforge 1.21") }
+	filtered := func(u *ui) { modsTab(u); u.bench.content[instance.ContentMods].filter.SetText("neoforge 1.21") }
 	pickerLoader := func(u *ui) {
 		u.dialogs.openCreate(demoSnapshot(), "")
 		u.dialogs.pickLoaderVersion(u, instance.LoaderNeoForge, "1.21.1", "21.1.248", func(string) {})
@@ -230,7 +237,8 @@ func TestRenderScreens(t *testing.T) {
 		snap  launcher.Snapshot
 		setup func(*ui)
 	}{
-		{"instances", demoSnapshot(), nil},
+		{"instances", demoSnapshot(), overviewTab},
+		{"mods", demoSnapshot(), modsTab},
 		{"instances-filtered", demoSnapshot(), filtered},
 		{"instances-confirm-delete", demoSnapshot(), confirmDelete},
 		{"configs", demoSnapshot(), configTab},

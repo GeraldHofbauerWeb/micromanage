@@ -139,22 +139,29 @@ func (r *railState) layoutRow(gtx layout.Context, u *ui, snap launcher.Snapshot,
 
 // --- workbench ---
 
-// benchTab is one tab of the workbench: a content kind, or the settings.
+// benchTab is one tab of the workbench: the overview, a content kind, or
+// the settings.
 type benchTab struct {
 	kind     instance.ContentKind
+	overview bool
 	settings bool
 }
 
 func (t benchTab) label() string {
-	if t.settings {
+	switch {
+	case t.overview:
+		return "Overview"
+	case t.settings:
 		return "Settings"
 	}
-	return t.kind.Label()
+	return t.kind.Short()
 }
 
-// benchTabs lists the tabs in order.
+// benchTabs lists the tabs in order. The overview comes first and is where
+// a newly selected instance opens; the content tabs follow in
+// ContentKinds order, which the overview's cards index into.
 func benchTabs() []benchTab {
-	var tabs []benchTab
+	tabs := []benchTab{{overview: true}}
 	for _, k := range instance.ContentKinds() {
 		tabs = append(tabs, benchTab{kind: k})
 	}
@@ -163,20 +170,28 @@ func benchTabs() []benchTab {
 
 // workbench shows the selected instance and everything in it.
 type workbench struct {
-	tab  int
-	tabs []widget.Clickable
+	tab    int
+	tabs   []widget.Clickable
+	tabRow widget.List
 
 	play, stop, cancel, folder, newFirst widget.Clickable
 
 	content  map[instance.ContentKind]*kindState
 	settings instanceSettings
+	overview overview
+
+	// shownFor is the instance the tab was chosen for; a new selection
+	// returns to the overview.
+	shownFor string
 }
 
 func newWorkbench() workbench {
 	w := workbench{
 		tabs:     make([]widget.Clickable, len(benchTabs())),
+		tabRow:   widget.List{List: layout.List{Axis: layout.Horizontal}},
 		content:  map[instance.ContentKind]*kindState{},
 		settings: newInstanceSettings(),
+		overview: newOverview(),
 	}
 	for _, k := range instance.ContentKinds() {
 		w.content[k] = &kindState{list: newList(), filter: newEditor()}
@@ -191,6 +206,10 @@ func (w *workbench) Layout(gtx layout.Context, u *ui, snap launcher.Snapshot) la
 		return w.layoutEmpty(gtx, u, snap)
 	}
 
+	if w.shownFor != inst.Name {
+		w.shownFor = inst.Name
+		w.tab = 0
+	}
 	for i := range w.tabs {
 		if w.tabs[i].Clicked(gtx) {
 			w.tab = i
@@ -217,7 +236,10 @@ func (w *workbench) Layout(gtx layout.Context, u *ui, snap launcher.Snapshot) la
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			gtx.Constraints.Min = gtx.Constraints.Max
 			tab := benchTabs()[w.tab]
-			if tab.settings {
+			switch {
+			case tab.overview:
+				return w.overview.Layout(gtx, u, snap, inst)
+			case tab.settings:
 				return w.settings.Layout(gtx, u, snap, inst)
 			}
 			return w.content[tab.kind].Layout(gtx, u, snap, inst, tab.kind)
@@ -367,7 +389,7 @@ func (w *workbench) layoutTabs(gtx layout.Context, u *ui, snap launcher.Snapshot
 		i, tab := i, tab
 		selected := i == w.tab
 		count := -1
-		if !tab.settings {
+		if !tab.settings && !tab.overview {
 			if entries := snap.ContentOf(tab.kind); entries != nil {
 				count = len(entries)
 			}
@@ -409,7 +431,11 @@ func (w *workbench) layoutTabs(gtx layout.Context, u *ui, snap launcher.Snapshot
 		}))
 	}
 
+	// The row scrolls sideways rather than truncating: on a narrow window
+	// the last tab is still reachable, and on a wide one nothing moves.
 	return layout.Inset{Left: sp3, Right: sp3}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.Flex{Axis: layout.Horizontal, Alignment: layout.End}.Layout(gtx, children...)
+		return w.tabRow.Layout(gtx, len(children), func(gtx layout.Context, i int) layout.Dimensions {
+			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.End}.Layout(gtx, children[i])
+		})
 	})
 }

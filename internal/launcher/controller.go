@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -17,6 +18,7 @@ import (
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/java"
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launch"
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/loader"
+	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/mods"
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/mojang"
 )
 
@@ -74,6 +76,9 @@ type (
 	ActionOpen struct{ Path string }
 	// ActionReveal shows a file in the file manager.
 	ActionReveal struct{ Path string }
+	// ActionOpenModPage opens a mod's page on Modrinth, or a CurseForge
+	// search for it, in the browser.
+	ActionOpenModPage struct{ Name, File string }
 	// ActionLaunch starts the selected instance.
 	ActionLaunch struct{ Name string }
 	// ActionStopGame asks a running game to close.
@@ -113,6 +118,7 @@ func (ActionSetEnabled) isAction()     {}
 func (ActionDeleteContent) isAction()  {}
 func (ActionOpen) isAction()           {}
 func (ActionReveal) isAction()         {}
+func (ActionOpenModPage) isAction()    {}
 func (ActionLaunch) isAction()         {}
 func (ActionStopGame) isAction()       {}
 func (ActionHarvest) isAction()        {}
@@ -150,6 +156,13 @@ type Controller struct {
 	// Loaders lists and installs mod loaders. Its endpoints are replaceable
 	// for tests.
 	Loaders *loader.Client
+	// Pages finds where a mod lives on the web.
+	Pages *mods.PageFinder
+
+	// modInfo remembers what each jar's manifest said, keyed by path, size
+	// and modification time, so a mods folder is read once rather than on
+	// every selection.
+	modInfo map[string]mods.Info
 
 	store  *Store
 	events chan Event
@@ -170,6 +183,8 @@ func NewController(m *instance.Manager, store *Store, accounts *AccountStore, ve
 		Accounts: accounts,
 		Version:  version,
 		Loaders:  loader.NewClient(layout, download.New()),
+		Pages:    mods.NewPageFinder(download.New()),
+		modInfo:  map[string]mods.Info{},
 		store:    store,
 		// Buffered so a burst of progress never blocks a worker.
 		events:  make(chan Event, 256),
@@ -293,6 +308,8 @@ func (c *Controller) run(ctx context.Context, id TaskID, a Action) {
 		if err := desktop.Reveal(action.Path); err != nil {
 			c.fail(fmt.Errorf("could not show %s: %w", filepath.Base(action.Path), err))
 		}
+	case ActionOpenModPage:
+		c.doOpenModPage(ctx, action)
 	case ActionLaunch:
 		c.doLaunch(ctx, id, action.Name)
 	case ActionStopGame:
@@ -490,11 +507,75 @@ func (c *Controller) doLoadContent(name string) {
 			c.fail(err)
 			return
 		}
+		if kind == instance.ContentMods {
+			c.describeMods(entries)
+		}
 		content[kind] = entries
 	}
 	c.emit(Event{Terminal: true, Apply: func(s *Store) {
 		s.SetContent(name, content)
 	}})
+}
+
+// describeMods fills in each jar's own name and version and orders the
+// list by that name, so it reads as a mod list rather than a directory.
+func (c *Controller) describeMods(entries []instance.Entry) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for i := range entries {
+		e := &entries[i]
+		key := fmt.Sprintf("%s|%d|%d", e.Path, e.Size, e.ModTime.UnixNano())
+		info, ok := c.modInfo[key]
+		if !ok {
+			// A jar that cannot be read is listed by file name; that is
+			// not worth an error in the status bar.
+			info, _ = mods.Read(e.Path)
+			c.modInfo[key] = info
+		}
+		e.Title = info.Name
+		e.Version = info.Version
+	}
+	sort.SliceStable(entries, func(i, j int) bool {
+		a, b := strings.ToLower(entries[i].Label()), strings.ToLower(entries[j].Label())
+		if a != b {
+			return a < b
+		}
+		return entries[i].Name < entries[j].Name
+	})
+}
+
+// doOpenModPage looks a mod up and opens what it finds.
+func (c *Controller) doOpenModPage(ctx context.Context, a ActionOpenModPage) {
+	dir, err := c.Manager.ContentDir(a.Name, instance.ContentMods)
+	if err != nil {
+		c.fail(err)
+		return
+	}
+	path := filepath.Join(dir, filepath.Base(a.File))
+	info, _ := mods.Read(path)
+	label := info.Name
+	if label == "" {
+		label = strings.TrimSuffix(strings.TrimSuffix(a.File, instance.DisabledSuffix), ".jar")
+	}
+	c.setStatus("Looking up " + label)
+
+	page, err := c.Pages.Find(ctx, path, info)
+	if err != nil {
+		c.fail(err)
+		return
+	}
+	if err := desktop.Open(page.URL); err != nil {
+		c.fail(fmt.Errorf("could not open a browser: %w", err))
+		return
+	}
+	switch {
+	case page.Exact:
+		c.setStatus("Opened " + label + " on Modrinth")
+	case page.Site == "Modrinth":
+		c.setStatus("Opened the closest match for " + label + " on Modrinth")
+	default:
+		c.setStatus(label + " is not on Modrinth; opened a CurseForge search")
+	}
 }
 
 // refreshInstances reloads the instance list only, for after a change that

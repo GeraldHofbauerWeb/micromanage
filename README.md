@@ -85,9 +85,12 @@ from the application menu.
    does not know yet. New instances are empty and instant; a loader is
    installed as part of creating one. Duplicating an existing instance copies
    its mods, configs and packs but not its worlds.
-3. **Work on it.** The tabs show what the instance holds. Every entry can be
-   opened with the program your desktop uses for it, shown in the file
-   manager, or deleted; a mod can be switched off, which renames it to
+3. **Work on it.** *Overview* shows what the instance holds — one card per
+   kind, each a way into its tab. Mods are listed by the name in their own
+   manifest; *Page* opens the mod on Modrinth (found by the file's hash, so
+   it is the exact project), falling back to a CurseForge search. Every
+   entry can be shown in the file manager or deleted, configs and logs open
+   in your editor, and a mod can be switched off, which renames it to
    `.jar.disabled` — the convention other launchers use, so it stays off there
    too. *Settings* holds the Minecraft version, the loader, memory, Java and
    JVM flags, and is where an instance is renamed, duplicated or deleted.

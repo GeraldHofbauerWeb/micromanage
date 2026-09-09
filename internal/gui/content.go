@@ -27,7 +27,7 @@ type kindState struct {
 }
 
 type contentRow struct {
-	open, reveal, toggle, del, confirm, keep widget.Clickable
+	page, open, reveal, toggle, del, confirm, keep widget.Clickable
 }
 
 // Layout draws a content tab: a filter above a list of entries with their
@@ -52,6 +52,8 @@ func (k *kindState) Layout(gtx layout.Context, u *ui, snap launcher.Snapshot, in
 		e := entries[i]
 		r := &k.rows[i]
 		switch {
+		case r.page.Clicked(gtx):
+			u.ctrl.Dispatch(launcher.ActionOpenModPage{Name: inst.Name, File: e.Name})
 		case r.open.Clicked(gtx):
 			u.ctrl.Dispatch(launcher.ActionOpen{Path: e.Path})
 		case r.reveal.Clicked(gtx):
@@ -166,11 +168,30 @@ func (k *kindState) layoutRow(gtx layout.Context, u *ui, kind instance.ContentKi
 						})
 					}),
 					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-						name := e.DisplayName()
+						fg := th.P.Text
 						if e.Disabled {
-							return th.text(gtx, name, sizeBody, 0, th.P.TextDim)
+							fg = th.P.TextDim
 						}
-						return th.body(gtx, name)
+						if e.Title == "" {
+							return th.text(gtx, e.DisplayName(), sizeBody, 0, fg)
+						}
+						// A mod that names itself gets its name, with the
+						// file it came as beside it for the times the file
+						// is what matters.
+						return row(gtx, sp2,
+							rigid(func(gtx layout.Context) layout.Dimensions {
+								return th.text(gtx, e.Title, sizeBody, 100, fg)
+							}),
+							rigid(func(gtx layout.Context) layout.Dimensions {
+								if e.Version == "" {
+									return layout.Dimensions{}
+								}
+								return th.monoIn(gtx, e.Version, th.P.TextDim)
+							}),
+							layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+								return th.monoIn(gtx, e.DisplayName(), alpha(th.P.TextDim, 0xA0))
+							}),
+						)
 					}),
 					rigid(func(gtx layout.Context) layout.Dimensions {
 						if confirming {
@@ -194,6 +215,10 @@ func (k *kindState) layoutRow(gtx layout.Context, u *ui, kind instance.ContentKi
 							}),
 							rigid(func(gtx layout.Context) layout.Dimensions {
 								switch {
+								case kind == instance.ContentMods:
+									// A jar has no program to open in; its page
+									// on the web is what "open" means for a mod.
+									return th.ghost(gtx, &r.page, u.ic.OpenInNew, "Page")
 								case e.IsDir:
 									return th.ghost(gtx, &r.open, u.ic.Folder, "Open")
 								case kind == instance.ContentConfig || kind == instance.ContentLogs || kind == instance.ContentCrashReports:
@@ -247,7 +272,7 @@ func filterEntries(entries []instance.Entry, filter string) []instance.Entry {
 	}
 	out := make([]instance.Entry, 0, len(entries))
 	for _, e := range entries {
-		name := strings.ToLower(e.Name)
+		name := strings.ToLower(e.Name + " " + e.Title)
 		ok := true
 		for _, w := range words {
 			if !strings.Contains(name, w) {
