@@ -30,6 +30,10 @@ jobs:
     # ./... still has to build.
     - name: Install Gio build dependencies
       run: |
+        # The runner image ships a Google Chrome apt source that breaks
+        # apt-get update whenever Google's index is mid-rollover. Nothing
+        # here needs it.
+        sudo rm -f /etc/apt/sources.list.d/google-chrome*.list
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends \
           gcc pkg-config libwayland-dev libx11-dev libx11-xcb-dev \
@@ -132,6 +136,10 @@ jobs:
     - name: Install Gio build dependencies
       if: startsWith(matrix.runner, 'ubuntu') && matrix.cgo == 1
       run: |
+        # The runner image ships a Google Chrome apt source that breaks
+        # apt-get update whenever Google's index is mid-rollover. Nothing
+        # here needs it.
+        sudo rm -f /etc/apt/sources.list.d/google-chrome*.list
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends \
           gcc pkg-config libwayland-dev libx11-dev libx11-xcb-dev \
