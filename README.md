@@ -216,12 +216,18 @@ It requires your own Azure application:
    Launchers registered before the review process started keep their access.
 
 Supply the id at build time (`make MSA_CLIENT_ID=<uuid>`), through
-`MIM_MSA_CLIENT_ID`, or with `config msa-client-id <uuid>` — in that order of
+`MICROMANAGE_MSA_CLIENT_ID`, or with `config msa-client-id <uuid>` — in that order of
 precedence, environment first. Without one, only local accounts are offered.
 
 The Minecraft session lasts about a day. It is renewed from the stored refresh
-token at the next launch, and only when that is refused does the account ask to
-sign in again.
+token in the background, an hour before it runs out, so a launch never waits
+for Microsoft — and a sign-in that has been revoked turns the account button
+red while you are still browsing, instead of stopping a launch. A launch still
+renews the session itself if it finds an expired one, which is what happens
+when the launcher has not been open in a while.
+
+The older `MIM_MSA_CLIENT_ID` is still read, so a shell profile written before
+the rename keeps working.
 
 **On credentials:** accounts are stored in
 `~/.config/micromanage/accounts.json` with mode 0600. The file is not

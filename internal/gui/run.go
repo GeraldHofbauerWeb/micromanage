@@ -38,7 +38,7 @@ type Options struct {
 	Version    string
 	LauncherID string
 	// MSAClientID is the Azure application id Microsoft sign-in runs against.
-	// It is resolved at startup from, in order, the MIM_MSA_CLIENT_ID
+	// It is resolved at startup from, in order, the MICROMANAGE_MSA_CLIENT_ID
 	// environment variable, the manager configuration, and the id compiled
 	// into the build — so a fork or a test build needs no recompile.
 	MSAClientID string
@@ -99,8 +99,12 @@ func Run(opts Options) error {
 // rebuild, then the saved configuration, then whatever the build was stamped
 // with.
 func resolveMSAClientID(compiledIn string, manager *instance.Manager) string {
-	if id := strings.TrimSpace(os.Getenv("MIM_MSA_CLIENT_ID")); id != "" {
-		return id
+	// The old variable name still works: it was the launcher's own before
+	// the rename, and breaking a shell profile over that would be rude.
+	for _, key := range []string{"MICROMANAGE_MSA_CLIENT_ID", "MIM_MSA_CLIENT_ID"} {
+		if id := strings.TrimSpace(os.Getenv(key)); id != "" {
+			return id
+		}
 	}
 	if id := strings.TrimSpace(manager.GetConfig()["msa-client-id"]); id != "" {
 		return id

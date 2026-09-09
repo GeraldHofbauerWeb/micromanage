@@ -166,7 +166,7 @@ func (s *loginScreen) layoutMicrosoft(gtx layout.Context, u *ui, snap launcher.S
 	th := u.th
 	if !snap.MSAConfigured {
 		return th.notice(gtx, u.ic.Info, "Microsoft sign-in needs an Azure application id, which this build "+
-			"does not have. Set one under Settings → Microsoft application id (or in MIM_MSA_CLIENT_ID) "+
+			"does not have. Set one under Settings → Microsoft application id (or in MICROMANAGE_MSA_CLIENT_ID) "+
 			"to play on online servers.", th.P.TextMid)
 	}
 	return column(gtx, sp2,

@@ -193,7 +193,22 @@ type Controller struct {
 	mu      sync.Mutex
 	cancels map[TaskID]context.CancelFunc
 	game    *launch.Process
+
+	// sessionMu serialises Microsoft session renewals; see renewSession.
+	sessionMu sync.Mutex
 }
+
+const (
+	// renewWindow is how far ahead of its expiry the launcher renews a
+	// Microsoft session on its own. A session lasts about a day, so an hour
+	// of margin puts the renewal in the minutes a player spends picking an
+	// instance rather than in the second after they press Play.
+	renewWindow = time.Hour
+	// renewTimeout bounds a renewal nobody is waiting for. The chain is four
+	// requests to Microsoft and Mojang; past this the launch path can try
+	// again and say what went wrong.
+	renewTimeout = 90 * time.Second
+)
 
 // NewController wires a controller against the core packages.
 func NewController(m *instance.Manager, store *Store, accounts *AccountStore, version string) *Controller {
@@ -460,6 +475,10 @@ func (c *Controller) doRefresh(ctx context.Context) {
 	}})
 
 	c.refreshStats()
+
+	// The session is renewed off to one side: the window is already usable,
+	// and waiting for Microsoft here would undo that.
+	go c.maybeRenewSession(ctx)
 
 	runtimes := c.detector(instances).Detect(ctx)
 	c.emit(Event{Terminal: true, Apply: func(s *Store) {
@@ -805,12 +824,19 @@ func (c *Controller) doLoginOffline(name string) {
 // MSAConfigured reports whether Microsoft sign-in can be offered.
 func (c *Controller) MSAConfigured() bool { return c.MSAClientID != "" }
 
-// msa builds a sign-in client whose progress is reported against one task.
-func (c *Controller) msa(id TaskID) *auth.MSA {
+// msaSilent builds a sign-in client that reports nothing, for work the
+// player did not ask for and should not have to watch.
+func (c *Controller) msaSilent() *auth.MSA {
 	client := auth.NewMSA(c.MSAClientID)
 	if c.MSAEndpoints.Token != "" {
 		client.Endpoints = c.MSAEndpoints
 	}
+	return client
+}
+
+// msa builds a sign-in client whose progress is reported against one task.
+func (c *Controller) msa(id TaskID) *auth.MSA {
+	client := c.msaSilent()
 	client.Observer = func(step string) {
 		c.emit(Event{Terminal: true, Apply: func(s *Store) {
 			s.UpdateLogin(id, func(l *LoginState) { l.Step = step })
@@ -925,13 +951,68 @@ func (c *Controller) ensureSession(ctx context.Context, id TaskID, account auth.
 	if account.Kind != auth.KindMSA || account.Usable() {
 		return account, nil
 	}
+	return c.renewSession(ctx, account, c.msa(id), func() {
+		c.step(id, "Renewing the Microsoft session")
+	})
+}
 
-	client := c.msa(id)
+// maybeRenewSession renews the signed-in Microsoft session before it lapses,
+// off to one side of everything else.
+//
+// It is started from a refresh and never waited for, so nothing about opening
+// the window depends on the network. What it buys is a launch that finds a
+// live session already there instead of stopping to fetch one, and an account
+// whose sign-in has been revoked saying so on the account button while the
+// player is still browsing — rather than at the moment they press Play.
+func (c *Controller) maybeRenewSession(ctx context.Context) {
+	if !c.MSAConfigured() {
+		return
+	}
+	account, ok := c.Accounts.Active()
+	if !ok || !account.RenewableWithin(renewWindow) {
+		return
+	}
+
+	// The context of the action that started this dies when that action
+	// returns; a renewal outlives it, under a limit of its own.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), renewTimeout)
+	defer cancel()
+
+	// A failure is not worth an error in front of the player: the launch
+	// path renews again and reports it properly, and a revoked sign-in has
+	// already turned the account button red by the time this returns.
+	_, _ = c.renewSession(ctx, account, c.msaSilent(), nil)
+}
+
+// renewSession exchanges the refresh token for a live session and stores what
+// comes back. announce, when given, says on screen that this is happening.
+//
+// Only one renewal runs at a time: Microsoft issues a new refresh token with
+// every renewal and retires the one that was used, so two overlapping
+// renewals would race to invalidate each other and could end up asking the
+// player to sign in again for no reason at all.
+func (c *Controller) renewSession(ctx context.Context, account auth.Account,
+	client *auth.MSA, announce func()) (auth.Account, error) {
+
+	c.sessionMu.Lock()
+	defer c.sessionMu.Unlock()
+
+	// Another renewal may have finished while this one waited for the lock.
+	// A strictly later expiry is what says so.
+	if current, ok := c.Accounts.Get(account.UUID); ok {
+		if current.Usable() && current.MCExpiresAt.After(account.MCExpiresAt) {
+			return current, nil
+		}
+		account = current
+	}
+
 	if !client.Configured() {
 		return account, auth.ErrNotConfigured
 	}
+	if announce != nil {
+		announce()
+	}
 
-	c.step(id, "Renewing the Microsoft session")
 	fresh, err := client.RefreshAccount(ctx, account)
 	if err != nil {
 		if errors.Is(err, auth.ErrReauth) {

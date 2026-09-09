@@ -25,6 +25,12 @@ type signInStub struct {
 	authorised atomic.Bool
 	// refreshRejected makes a token refresh fail the way a revoked one does.
 	refreshRejected atomic.Bool
+	// refreshes counts the renewals that reached Microsoft, so a test can
+	// tell "renewed" from "left alone".
+	refreshes atomic.Int64
+	// refreshGate holds a renewal at the first request until it is closed,
+	// which is how a test watches what happens while one is in flight.
+	refreshGate chan struct{}
 }
 
 func newSignInStub(t *testing.T) *signInStub {
@@ -46,6 +52,13 @@ func newSignInStub(t *testing.T) *signInStub {
 	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
 		if r.Form.Get("grant_type") == "refresh_token" {
+			stub.refreshes.Add(1)
+			if gate := stub.refreshGate; gate != nil {
+				select {
+				case <-gate:
+				case <-time.After(10 * time.Second):
+				}
+			}
 			if stub.refreshRejected.Load() {
 				writeTestJSON(w, 400, map[string]any{"error": "invalid_grant"})
 				return

@@ -117,6 +117,19 @@ func (s *AccountStore) Active() (auth.Account, bool) {
 	return auth.Account{}, false
 }
 
+// Get returns one account by UUID.
+func (s *AccountStore) Get(uuid string) (auth.Account, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, a := range s.accounts {
+		if a.UUID == uuid {
+			return a, true
+		}
+	}
+	return auth.Account{}, false
+}
+
 // Add stores an account and makes it active, replacing one with the same UUID.
 func (s *AccountStore) Add(account auth.Account) error {
 	s.mu.Lock()

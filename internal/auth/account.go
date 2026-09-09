@@ -58,6 +58,19 @@ func (a Account) Usable() bool {
 	return time.Now().Add(expirySkew).Before(a.MCExpiresAt)
 }
 
+// RenewableWithin reports whether a Microsoft session is worth renewing now
+// because it lapses inside d.
+//
+// This is what the launcher checks in the background, ahead of any launch:
+// Usable answers "can this play right this second", which is the wrong
+// question an hour before a session runs out.
+func (a Account) RenewableWithin(d time.Duration) bool {
+	if a.Kind != KindMSA || a.NeedsReauth || a.MSRefreshToken == "" {
+		return false
+	}
+	return !time.Now().Add(d).Before(a.MCExpiresAt)
+}
+
 // AccessToken returns the token to launch with. Offline accounts use "0",
 // which is what the game expects when there is no session.
 func (a Account) AccessToken() string {

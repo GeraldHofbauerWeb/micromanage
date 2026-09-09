@@ -86,7 +86,7 @@ and the graphical launcher.`,
 		client := auth.NewMSA(msaClientID(manager))
 		if !client.Configured() {
 			return fmt.Errorf("%w; set it with 'config msa-client-id <id>' "+
-				"or the MIM_MSA_CLIENT_ID environment variable", auth.ErrNotConfigured)
+				"or the MICROMANAGE_MSA_CLIENT_ID environment variable", auth.ErrNotConfigured)
 		}
 		client.Observer = func(step string) { fmt.Fprintf(os.Stderr, "  %s\n", step) }
 
@@ -226,13 +226,25 @@ func findAccount(store *launcher.AccountStore, wanted string) (auth.Account, err
 // launcher does: environment first, then the saved configuration, then the id
 // this binary was built with.
 func msaClientID(manager *instance.Manager) string {
-	if id := strings.TrimSpace(os.Getenv("MIM_MSA_CLIENT_ID")); id != "" {
+	if id := msaClientIDFromEnv(); id != "" {
 		return id
 	}
 	if id := strings.TrimSpace(manager.MSAClientID); id != "" {
 		return id
 	}
 	return strings.TrimSpace(defaultMSAClientID)
+}
+
+// msaClientIDFromEnv reads the application id from the environment. The old
+// name is still accepted: it was the launcher's own before the rename, and
+// breaking someone's shell profile over a rename would be rude.
+func msaClientIDFromEnv() string {
+	for _, key := range []string{"MICROMANAGE_MSA_CLIENT_ID", "MIM_MSA_CLIENT_ID"} {
+		if id := strings.TrimSpace(os.Getenv(key)); id != "" {
+			return id
+		}
+	}
+	return ""
 }
 
 // refreshIfExpired renews a Microsoft session before a launch uses it, and
