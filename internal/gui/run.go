@@ -29,6 +29,10 @@ import (
 // repaints. Terminal events bypass this and repaint immediately.
 const invalidateInterval = 30 * time.Millisecond
 
+// appID is the desktop identity of the window: it has to match the name of
+// the installed .desktop file (see packaging/), or nothing links the two.
+const appID = "minecraft-instance-manager"
+
 // Options configures the launcher window.
 type Options struct {
 	Version    string
@@ -57,6 +61,12 @@ func Run(opts Options) error {
 	ctrl.LauncherID = opts.LauncherID
 	ctrl.MSAClientID = resolveMSAClientID(opts.MSAClientID, manager)
 	store.SetMSAConfigured(ctrl.MSAConfigured())
+
+	// The desktop matches a window to its .desktop file by this id — the
+	// Wayland app_id, the X11 class — so it has to be the file's name. Left
+	// to itself Gio uses the binary's name, and the dock then shows
+	// "minecraft-instance-manager-gui" under a blank icon.
+	app.ID = appID
 
 	w := new(app.Window)
 	w.Option(
