@@ -1,6 +1,8 @@
 package gui
 
 import (
+	"fmt"
+	"image/color"
 	"strconv"
 	"strings"
 
@@ -9,6 +11,7 @@ import (
 	"gioui.org/widget"
 
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
+	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launch"
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launcher"
 )
 
@@ -38,6 +41,18 @@ type instanceSettings struct {
 
 	rename, duplicate, remove widget.Clickable
 	newName                   *widget.Editor
+
+	// The game options card: a label for the next snapshot, the buttons on
+	// the file, and one Restore/Delete pair per snapshot.
+	optLabel                  *widget.Editor
+	optSave, optEdit, optShow widget.Clickable
+	optRows                   []optionsRow
+	// optConfirming names the snapshot whose Delete was pressed once.
+	optConfirming string
+}
+
+type optionsRow struct {
+	restore, del, confirm, keep widget.Clickable
 }
 
 func newInstanceSettings() instanceSettings {
@@ -49,6 +64,7 @@ func newInstanceSettings() instanceSettings {
 		jvmArgs:  &widget.Editor{},
 		notes:    &widget.Editor{},
 		newName:  newEditor(),
+		optLabel: newEditor(),
 	}
 }
 
@@ -139,10 +155,12 @@ func (s *instanceSettings) Layout(gtx layout.Context, u *ui, snap launcher.Snaps
 	if s.remove.Clicked(gtx) {
 		u.dialogs.openDelete(inst)
 	}
+	s.updateOptions(gtx, u, snap)
 
 	sections := []layout.Widget{
 		func(gtx layout.Context) layout.Dimensions { return s.layoutGame(gtx, u, snap, loaders) },
 		func(gtx layout.Context) layout.Dimensions { return s.layoutJava(gtx, u) },
+		func(gtx layout.Context) layout.Dimensions { return s.layoutOptions(gtx, u, snap) },
 		func(gtx layout.Context) layout.Dimensions { return s.layoutInstance(gtx, u, snap, inst) },
 	}
 
@@ -288,6 +306,176 @@ func (s *instanceSettings) layoutInstance(gtx layout.Context, u *ui, snap launch
 				)
 			}),
 		)
+	})
+}
+
+// updateOptions reads the options card's clicks.
+func (s *instanceSettings) updateOptions(gtx layout.Context, u *ui, snap launcher.Snapshot) {
+	name := snap.Selected
+	if s.optSave.Clicked(gtx) {
+		u.dispatch(launcher.ActionSaveOptions{Name: name, Label: strings.TrimSpace(s.optLabel.Text())})
+		s.optLabel.SetText("")
+	}
+	if s.optEdit.Clicked(gtx) {
+		u.dispatch(launcher.ActionOpen{Path: snap.Options.Path})
+	}
+	if s.optShow.Clicked(gtx) {
+		u.dispatch(launcher.ActionReveal{Path: snap.Options.Path})
+	}
+	for len(s.optRows) < len(snap.OptionsSnapshots) {
+		s.optRows = append(s.optRows, optionsRow{})
+	}
+	for i, snapshot := range snap.OptionsSnapshots {
+		r := &s.optRows[i]
+		switch {
+		case r.restore.Clicked(gtx):
+			u.dispatch(launcher.ActionRestoreOptions{Name: name, Snapshot: snapshot.Name})
+		case r.del.Clicked(gtx):
+			s.optConfirming = snapshot.Name
+		case r.keep.Clicked(gtx):
+			s.optConfirming = ""
+		case r.confirm.Clicked(gtx):
+			s.optConfirming = ""
+			u.dispatch(launcher.ActionDeleteOptionsSnapshot{Name: name, Snapshot: snapshot.Name})
+		}
+	}
+}
+
+// layoutOptions is the game options card: the file the game keeps its
+// settings in, a way to keep a copy of it, and the copies kept so far.
+func (s *instanceSettings) layoutOptions(gtx layout.Context, u *ui, snap launcher.Snapshot) layout.Dimensions {
+	th := u.th
+	loaded := snap.OptionsLoaded()
+	opt := snap.Options
+
+	return th.card(gtx, func(gtx layout.Context) layout.Dimensions {
+		gtx.Constraints.Min.X = gtx.Constraints.Max.X
+		return column(gtx, sp3,
+			rigid(func(gtx layout.Context) layout.Dimensions { return th.title(gtx, "Game options") }),
+			rigid(func(gtx layout.Context) layout.Dimensions {
+				return th.wrapped(gtx, "Keybinds, video settings, the resource pack order — everything set "+
+					"in-game lives in options.txt. A snapshot keeps a copy of it that can be put back later.", th.P.TextDim)
+			}),
+			rigid(func(gtx layout.Context) layout.Dimensions {
+				gtx.Constraints.Min.X = gtx.Constraints.Max.X
+				return row(gtx, sp2,
+					rigid(func(gtx layout.Context) layout.Dimensions {
+						return th.monoIn(gtx, instance.OptionsFile, th.P.Text)
+					}),
+					rigid(func(gtx layout.Context) layout.Dimensions {
+						switch {
+						case !loaded:
+							return layout.Dimensions{}
+						case !opt.Exists:
+							return th.smallIn(gtx, "not written yet — the game makes it on the first run", th.P.TextDim)
+						}
+						return th.monoIn(gtx, launch.FormatBytes(opt.Size)+" · changed "+humaniseSince(opt.ModTime), th.P.TextDim)
+					}),
+					flexFill(),
+					rigid(func(gtx layout.Context) layout.Dimensions {
+						if !opt.Exists {
+							return layout.Dimensions{}
+						}
+						return row(gtx, sp1,
+							rigid(func(gtx layout.Context) layout.Dimensions { return th.ghost(gtx, &s.optEdit, u.ic.Edit, "Edit") }),
+							rigid(func(gtx layout.Context) layout.Dimensions { return th.ghost(gtx, &s.optShow, u.ic.Launch, "Show") }),
+						)
+					}),
+				)
+			}),
+			rigid(func(gtx layout.Context) layout.Dimensions {
+				if !opt.Exists {
+					return layout.Dimensions{}
+				}
+				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.End}.Layout(gtx,
+					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+						return th.field(gtx, s.optLabel, "Label for the snapshot (optional)", "e.g. keybinds sorted out")
+					}),
+					hspacer(sp2),
+					rigid(func(gtx layout.Context) layout.Dimensions {
+						return th.secondary(gtx, &s.optSave, "Save snapshot")
+					}),
+				)
+			}),
+			rigid(func(gtx layout.Context) layout.Dimensions {
+				if !loaded || len(snap.OptionsSnapshots) == 0 {
+					return layout.Dimensions{}
+				}
+				return hairline(gtx, th.P.LineDim)
+			}),
+			rigid(func(gtx layout.Context) layout.Dimensions {
+				if !loaded || len(snap.OptionsSnapshots) == 0 {
+					return layout.Dimensions{}
+				}
+				rows := make([]layout.FlexChild, 0, len(snap.OptionsSnapshots))
+				for i := range snap.OptionsSnapshots {
+					i := i
+					rows = append(rows, rigid(func(gtx layout.Context) layout.Dimensions {
+						return s.layoutSnapshotRow(gtx, u, snap.OptionsSnapshots[i], &s.optRows[i])
+					}))
+				}
+				return column(gtx, unit.Dp(2), rows...)
+			}),
+		)
+	})
+}
+
+// layoutSnapshotRow is one saved copy: what it was saved as, when, how far
+// it is from the current file, and what to do with it.
+func (s *instanceSettings) layoutSnapshotRow(gtx layout.Context, u *ui, snap instance.OptionsSnapshot, r *optionsRow) layout.Dimensions {
+	th := u.th
+	confirming := s.optConfirming == snap.Name
+
+	meta := snap.Time.Format("2 Jan 2006 15:04") + " · " + launch.FormatBytes(snap.Size)
+	switch {
+	case snap.Changes == 0:
+		meta += " · same as now"
+	case snap.Changes == 1:
+		meta += " · 1 setting differs"
+	case snap.Changes > 1:
+		meta += fmt.Sprintf(" · %d settings differ", snap.Changes)
+	}
+
+	bg := color.NRGBA{}
+	if confirming {
+		bg = alpha(th.P.Bad, 0x14)
+	}
+	gtx.Constraints.Min.X = gtx.Constraints.Max.X
+	return fill(gtx, bg, unit.Dp(6), func(gtx layout.Context) layout.Dimensions {
+		return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(6), Right: unit.Dp(2)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			gtx.Constraints.Min.X = gtx.Constraints.Max.X
+			return row(gtx, sp2,
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					return column(gtx, unit.Dp(2),
+						rigid(func(gtx layout.Context) layout.Dimensions {
+							if snap.Label == "" {
+								return th.text(gtx, snap.Time.Format("2 Jan 2006 15:04"), sizeBody, 0, th.P.Text)
+							}
+							return th.text(gtx, snap.Label, sizeBody, 100, th.P.Text)
+						}),
+						rigid(func(gtx layout.Context) layout.Dimensions { return th.monoIn(gtx, meta, th.P.TextDim) }),
+					)
+				}),
+				rigid(func(gtx layout.Context) layout.Dimensions {
+					if confirming {
+						return row(gtx, sp1,
+							rigid(func(gtx layout.Context) layout.Dimensions { return th.smallIn(gtx, "Delete the snapshot?", th.P.Bad) }),
+							rigid(func(gtx layout.Context) layout.Dimensions { return th.danger(gtx, &r.confirm, nil, "Yes, delete") }),
+							rigid(func(gtx layout.Context) layout.Dimensions { return th.ghost(gtx, &r.keep, nil, "Keep") }),
+						)
+					}
+					return row(gtx, sp1,
+						rigid(func(gtx layout.Context) layout.Dimensions {
+							if snap.Changes == 0 {
+								return th.smallIn(gtx, "in use", th.P.TextDim)
+							}
+							return th.ghost(gtx, &r.restore, u.ic.Refresh, "Restore")
+						}),
+						rigid(func(gtx layout.Context) layout.Dimensions { return th.danger(gtx, &r.del, u.ic.Delete, "") }),
+					)
+				}),
+			)
+		})
 	})
 }
 

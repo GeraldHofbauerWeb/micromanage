@@ -8,8 +8,11 @@ import (
 	"time"
 
 	"gioui.org/app"
+	"gioui.org/io/event"
+	"gioui.org/io/pointer"
 	"gioui.org/layout"
 	"gioui.org/op"
+	"gioui.org/op/clip"
 	"gioui.org/unit"
 	"gioui.org/widget"
 
@@ -160,6 +163,13 @@ type ui struct {
 	login     loginScreen
 	setScreen settingsScreen
 	dialogs   dialogs
+	menu      contextMenu
+
+	// pointer is where the pointer last was, in window coordinates. A
+	// right-click knows only its own row; the menu it opens has to be
+	// placed in the window.
+	pointer    image.Point
+	pointerTag struct{}
 }
 
 func newUI(ctrl *launcher.Controller) *ui {
@@ -186,10 +196,37 @@ func (u *ui) Layout(gtx layout.Context) layout.Dimensions {
 	return u.layoutSnapshot(gtx, u.ctrl.Store().Snapshot())
 }
 
+// dispatch hands an action to the controller. The offscreen renderer has
+// none, and a menu item pressed there should do nothing rather than crash.
+func (u *ui) dispatch(a launcher.Action) {
+	if u.ctrl != nil {
+		u.ctrl.Dispatch(a)
+	}
+}
+
+// trackPointer remembers the pointer's window position. The handler is
+// registered before anything else in the frame, so every later widget's
+// events reach it too, whatever they do with them.
+func (u *ui) trackPointer(gtx layout.Context) {
+	for {
+		ev, ok := gtx.Event(pointer.Filter{Target: &u.pointerTag,
+			Kinds: pointer.Move | pointer.Press | pointer.Drag | pointer.Enter})
+		if !ok {
+			break
+		}
+		if e, ok := ev.(pointer.Event); ok {
+			u.pointer = e.Position.Round()
+		}
+	}
+	event.Op(gtx.Ops, &u.pointerTag)
+}
+
 // layoutSnapshot draws a frame from a given snapshot. Splitting it out lets
 // the offscreen renderer draw a state without a live controller behind it.
 func (u *ui) layoutSnapshot(gtx layout.Context, snap launcher.Snapshot) layout.Dimensions {
 	th := u.th
+	defer clip.Rect{Max: gtx.Constraints.Max}.Push(gtx.Ops).Pop()
+	u.trackPointer(gtx)
 
 	// Bar clicks are read before layout so the frame already reflects them.
 	if u.home.Clicked(gtx) {
@@ -228,6 +265,9 @@ func (u *ui) layoutSnapshot(gtx layout.Context, snap launcher.Snapshot) layout.D
 			}),
 			layout.Expanded(func(gtx layout.Context) layout.Dimensions {
 				return u.dialogs.Layout(gtx, u, snap)
+			}),
+			layout.Expanded(func(gtx layout.Context) layout.Dimensions {
+				return u.menu.Layout(gtx, u)
 			}),
 		)
 	})

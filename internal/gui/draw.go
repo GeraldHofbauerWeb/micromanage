@@ -188,3 +188,62 @@ func rigid(w layout.Widget) layout.FlexChild { return layout.Rigid(w) }
 
 // none is an empty widget.
 func none(layout.Context) layout.Dimensions { return layout.Dimensions{} }
+
+// mark draws the launcher's icon at a given size: the rounded dark tile
+// with three stacked instances, the top one in the accent. It is the same
+// geometry as packaging/minecraft-instance-manager.svg, scaled, so the
+// window and the application menu agree on what this program looks like.
+func mark(gtx layout.Context, size unit.Dp) layout.Dimensions {
+	s := float32(gtx.Dp(size))
+	at := func(v float32) float32 { return v / 512 * s }
+
+	// The tile.
+	radius := int(at(112))
+	tile := image.Rectangle{Max: image.Pt(int(s), int(s))}
+	paint.FillShape(gtx.Ops, rgb(0x1E2128),
+		clip.RRect{Rect: tile, SE: radius, SW: radius, NE: radius, NW: radius}.Op(gtx.Ops))
+	border := clip.RRect{Rect: tile, SE: radius, SW: radius, NE: radius, NW: radius}.Path(gtx.Ops)
+	paint.FillShape(gtx.Ops, rgb(0x343945), clip.Stroke{Path: border, Width: max(1, at(3))}.Op())
+
+	// One instance: a rhombus top face over two side faces, 300 wide and
+	// 150 tall on top, 36 deep, centred at x=256 with its top at y.
+	slabAt := func(y float32, top, left, right color.NRGBA) clip.PathSpec {
+		cx, w, h, d := at(256), at(150), at(75), at(36)
+		var p clip.Path
+		p.Begin(gtx.Ops)
+		p.MoveTo(f32.Pt(cx, at(y)))
+		p.LineTo(f32.Pt(cx+w, at(y)+h))
+		p.LineTo(f32.Pt(cx, at(y)+2*h))
+		p.LineTo(f32.Pt(cx-w, at(y)+h))
+		p.Close()
+		face := p.End()
+		paint.FillShape(gtx.Ops, top, clip.Outline{Path: face}.Op())
+
+		var l clip.Path
+		l.Begin(gtx.Ops)
+		l.MoveTo(f32.Pt(cx-w, at(y)+h))
+		l.LineTo(f32.Pt(cx, at(y)+2*h))
+		l.LineTo(f32.Pt(cx, at(y)+2*h+d))
+		l.LineTo(f32.Pt(cx-w, at(y)+h+d))
+		l.Close()
+		paint.FillShape(gtx.Ops, left, clip.Outline{Path: l.End()}.Op())
+
+		var r clip.Path
+		r.Begin(gtx.Ops)
+		r.MoveTo(f32.Pt(cx, at(y)+2*h))
+		r.LineTo(f32.Pt(cx+w, at(y)+h))
+		r.LineTo(f32.Pt(cx+w, at(y)+h+d))
+		r.LineTo(f32.Pt(cx, at(y)+2*h+d))
+		r.Close()
+		paint.FillShape(gtx.Ops, right, clip.Outline{Path: r.End()}.Op())
+		return face
+	}
+
+	slabAt(261, rgb(0x2E5C39), rgb(0x24492D), rgb(0x1C3A24))
+	slabAt(173, rgb(0x3E7A4B), rgb(0x2E5C39), rgb(0x24492D))
+	active := slabAt(85, rgb(0x5B8DEF), rgb(0x3F66B5), rgb(0x33507F))
+	// The hairline that keeps the active block's shape at small sizes.
+	paint.FillShape(gtx.Ops, rgb(0x8FB2F5), clip.Stroke{Path: active, Width: max(1, at(3))}.Op())
+
+	return layout.Dimensions{Size: image.Pt(int(s), int(s))}
+}

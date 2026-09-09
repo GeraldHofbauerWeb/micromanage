@@ -41,6 +41,7 @@ const (
 	TaskReclaim TaskKind = "reclaim"
 	TaskInstall TaskKind = "install"
 	TaskDetect  TaskKind = "detect"
+	TaskAdopt   TaskKind = "adopt"
 	TaskLogin   TaskKind = "login"
 )
 
@@ -112,6 +113,13 @@ type Snapshot struct {
 	// first launch.
 	ProfileInstalled bool
 
+	// Options is the selected instance's options.txt and OptionsSnapshots
+	// its saved copies, newest first; OptionsFor names the instance they
+	// were read for.
+	Options          instance.OptionsInfo
+	OptionsSnapshots []instance.OptionsSnapshot
+	OptionsFor       string
+
 	// MCVersions lists the Minecraft releases, newest first, once asked for.
 	MCVersions []string
 	// LoaderVersions holds the releases of one loader for one Minecraft
@@ -156,6 +164,9 @@ type Store struct {
 	content          map[instance.ContentKind][]instance.Entry
 	contentFor       string
 	profileInstalled bool
+	options          instance.OptionsInfo
+	optionsSnapshots []instance.OptionsSnapshot
+	optionsFor       string
 
 	mcVersions      []string
 	loaderVersions  map[string][]loader.Version
@@ -202,6 +213,9 @@ func (s *Store) Snapshot() Snapshot {
 		ContentFor:       s.contentFor,
 		Content:          make(map[instance.ContentKind][]instance.Entry, len(s.content)),
 		ProfileInstalled: s.profileInstalled,
+		Options:          s.options,
+		OptionsSnapshots: append([]instance.OptionsSnapshot(nil), s.optionsSnapshots...),
+		OptionsFor:       s.optionsFor,
 		MCVersions:       append([]string(nil), s.mcVersions...),
 		LoaderVersions:   make(map[string][]loader.Version, len(s.loaderVersions)),
 		VersionsPending:  make(map[string]bool, len(s.versionsPending)),
@@ -287,6 +301,15 @@ func (s *Store) SetEditing(meta instance.Meta, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.editing, s.editingOK = meta, ok
+}
+
+// SetOptions publishes one instance's options.txt and its snapshots.
+func (s *Store) SetOptions(name string, info instance.OptionsInfo, snapshots []instance.OptionsSnapshot) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.optionsFor = name
+	s.options = info
+	s.optionsSnapshots = snapshots
 }
 
 // SetProfileInstalled records whether the selected instance can launch
@@ -445,4 +468,10 @@ func (s Snapshot) ContentOf(kind instance.ContentKind) []instance.Entry {
 		return nil
 	}
 	return s.Content[kind]
+}
+
+// OptionsLoaded reports whether the options shown belong to the selected
+// instance, so a stale list is never shown against a new selection.
+func (s Snapshot) OptionsLoaded() bool {
+	return s.Selected != "" && s.OptionsFor == s.Selected
 }

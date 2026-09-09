@@ -3,6 +3,7 @@
 package gui
 
 import (
+	"image"
 	"os"
 	"path/filepath"
 	"testing"
@@ -115,6 +116,14 @@ func demoSnapshot() launcher.Snapshot {
 		Content:          content,
 		ContentFor:       "sebsmodpack5",
 		ProfileInstalled: true,
+		Options: instance.OptionsInfo{Path: "/home/gerry/.minecraft-instances/sebsmodpack5/options.txt",
+			Exists: true, Size: 9500, ModTime: now.Add(-3 * time.Hour)},
+		OptionsSnapshots: []instance.OptionsSnapshot{
+			{Name: "20260909-181104--before restore.txt", Label: "before restore", Time: now.Add(-40 * time.Minute), Size: 9500, Changes: 0},
+			{Name: "20260902-142210--keybinds sorted out.txt", Label: "keybinds sorted out", Time: now.Add(-7 * 24 * time.Hour), Size: 9300, Changes: 3},
+			{Name: "20260814-201500.txt", Time: now.Add(-26 * 24 * time.Hour), Size: 9100, Changes: 17},
+		},
+		OptionsFor: "sebsmodpack5",
 		Editing: instance.Meta{
 			Name:             "sebsmodpack5",
 			MinecraftVersion: "1.21.1",
@@ -164,6 +173,10 @@ func TestRenderScreens(t *testing.T) {
 	unselected := demoSnapshot()
 	unselected.Selected = ""
 
+	adopting := empty
+	adopting.Task = launcher.Task{ID: 4, Kind: launcher.TaskAdopt, Label: "Adopting your .minecraft as Default",
+		Phase: "Sharing its game files", Message: "1204 files, 612 MB", Started: time.Now()}
+
 	login := demoSnapshot()
 	login.Screen = launcher.ScreenLogin
 	login.MSAConfigured = true
@@ -211,6 +224,20 @@ func TestRenderScreens(t *testing.T) {
 		u.dialogs.openCreate(demoSnapshot(), "")
 		u.dialogs.pickLoaderVersion(u, instance.LoaderNeoForge, "1.21.1", "21.1.248", func(string) {})
 	}
+	contextMenu := func(u *ui) {
+		snap := demoSnapshot()
+		u.pointer = image.Pt(150, 205)
+		u.openInstanceMenu(snap, snap.Instances[1])
+	}
+	contextMenuActive := func(u *ui) {
+		snap := demoSnapshot()
+		u.pointer = image.Pt(150, 268)
+		u.openInstanceMenu(snap, snap.Instances[2])
+	}
+	optionsCard := func(u *ui) {
+		instanceSettings(u)
+		u.bench.settings.list.Position.First = 2
+	}
 	pickerFetching := func(u *ui) {
 		u.dialogs.openCreate(demoSnapshot(), "")
 		u.dialogs.pickLoaderVersion(u, instance.LoaderForge, "1.20.1", "", func(string) {})
@@ -244,6 +271,10 @@ func TestRenderScreens(t *testing.T) {
 		{"configs", demoSnapshot(), configTab},
 		{"worlds", demoSnapshot(), worldsTab},
 		{"instance-settings", demoSnapshot(), instanceSettings},
+		{"instance-options", demoSnapshot(), optionsCard},
+		{"context-menu", demoSnapshot(), contextMenu},
+		{"context-menu-active", demoSnapshot(), contextMenuActive},
+		{"adopting", adopting, nil},
 		{"dialog-create", demoSnapshot(), createDialog},
 		{"picker-loader", withVersions, pickerLoader},
 		{"picker-fetching", fetching, pickerFetching},

@@ -79,7 +79,12 @@ from the application menu.
    its session on its own. It needs an Azure application id (see below). A
    local account plays single-player in full but is rejected by servers running
    in online mode.
-2. **Pick an instance** on the left, or press **+** to make one. The version
+2. **Pick an instance** on the left, or press **+** to make one. On the
+   very first start, with no instances yet, your existing `.minecraft` is
+   moved in as the instance *Default* — renamed rather than copied, and
+   linked back — so the worlds, mods and settings already there are the
+   first instance. Right-click an instance, or press its **⋯**, for Play,
+   Overview, Settings, its folder, Duplicate and Delete. The version
    fields open a list — Minecraft releases from Mojang, loader builds from the
    loader's own service — with a filter, and accept a typed version the list
    does not know yet. New instances are empty and instant; a loader is
@@ -94,6 +99,10 @@ from the application menu.
    `.jar.disabled` — the convention other launchers use, so it stays off there
    too. *Settings* holds the Minecraft version, the loader, memory, Java and
    JVM flags, and is where an instance is renamed, duplicated or deleted.
+   Its *Game options* card keeps snapshots of `options.txt` — keybinds,
+   video settings, the resource pack order, everything set in-game — and
+   puts any of them back; a restore keeps the file it replaces as a
+   snapshot of its own, so it can be undone.
 4. **Play.** The status bar says how long the launch took and, once the game
    runs, what it last logged.
 
@@ -113,7 +122,12 @@ also how it is tested.
 | `create <name> [--clone <src>]` | Create an instance, empty by default |
 | `switch <name>` | Make an instance the active one |
 | `delete <name>` | Remove an instance (never the active one) |
+| `adopt [name]` | Turn the current `.minecraft` into an instance (the GUI does this on its first start) |
 | `restore` | Put the original `.minecraft` back |
+| `options list <name>` | The saved copies of an instance's `options.txt`, with how far each is from the current one |
+| `options save <name> [label]` / `options restore <name> [snapshot]` | Keep a copy of the game options, or put one back (`latest` by default; the replaced file is kept) |
+| `options diff <name> [snapshot]` | The settings a restore would change |
+| `options edit <name>` / `options path <name>` | Open `options.txt` in `$EDITOR`, or print where it is |
 | `instance detect [--all] [--write]` | Work out what an instance runs |
 | `instance show <name>` / `instance set <name> <key> <value>` | Read and change settings |
 | `launch <name>` | Launch as the signed-in account; `--offline <player>` overrides it, `--dry-run` prints the command line |

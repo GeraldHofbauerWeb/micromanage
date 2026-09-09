@@ -101,6 +101,15 @@ type (
 	ActionInstallLoader struct{ Name string }
 	// ActionSetConfig changes a manager configuration key.
 	ActionSetConfig struct{ Key, Value string }
+	// ActionSaveOptions keeps a copy of an instance's options.txt.
+	ActionSaveOptions struct{ Name, Label string }
+	// ActionRestoreOptions puts a snapshot back as the instance's
+	// options.txt; LatestSnapshot names the newest.
+	ActionRestoreOptions struct{ Name, Snapshot string }
+	// ActionDeleteOptionsSnapshot removes one saved copy.
+	ActionDeleteOptionsSnapshot struct{ Name, Snapshot string }
+	// ActionAdopt turns the current .minecraft into an instance.
+	ActionAdopt struct{ Name string }
 )
 
 func (ActionRefresh) isAction()        {}
@@ -127,6 +136,11 @@ func (ActionReclaim) isAction()        {}
 func (ActionListVersions) isAction()   {}
 func (ActionInstallLoader) isAction()  {}
 func (ActionSetConfig) isAction()      {}
+
+func (ActionSaveOptions) isAction()           {}
+func (ActionRestoreOptions) isAction()        {}
+func (ActionDeleteOptionsSnapshot) isAction() {}
+func (ActionAdopt) isAction()                 {}
 
 // Event is a state change produced by a worker.
 type Event struct {
@@ -168,6 +182,9 @@ type Controller struct {
 	events chan Event
 
 	nextTask atomic.Int64
+	// adoptTried makes the first-run adoption a one-shot: a refresh that
+	// still finds no instances afterwards does not try again.
+	adoptTried atomic.Bool
 
 	mu      sync.Mutex
 	cancels map[TaskID]context.CancelFunc
@@ -276,6 +293,7 @@ func (c *Controller) run(ctx context.Context, id TaskID, a Action) {
 	switch action := a.(type) {
 	case ActionRefresh:
 		c.doRefresh(ctx)
+		c.maybeAdopt(ctx, id)
 	case ActionSelect:
 		c.doSelect(action.Name)
 	case ActionLoginOffline:
@@ -326,7 +344,77 @@ func (c *Controller) run(ctx context.Context, id TaskID, a Action) {
 		c.doScanStorage(ctx)
 	case ActionSetConfig:
 		c.doSetConfig(ctx, action)
+	case ActionSaveOptions:
+		c.doSaveOptions(action)
+	case ActionRestoreOptions:
+		c.doRestoreOptions(action)
+	case ActionDeleteOptionsSnapshot:
+		c.doDeleteOptionsSnapshot(action)
+	case ActionAdopt:
+		c.doAdopt(ctx, id, action.Name)
 	}
+}
+
+// maybeAdopt runs the first-run adoption: with no instances yet and a real
+// .minecraft on disk, that directory becomes the instance Default, so the
+// player's existing worlds and settings are the first thing in the list
+// rather than something to recreate.
+func (c *Controller) maybeAdopt(ctx context.Context, id TaskID) {
+	if c.adoptTried.Load() || !c.Manager.CanAdopt() {
+		return
+	}
+	c.adoptTried.Store(true)
+	c.doAdopt(ctx, id, instance.DefaultInstanceName)
+}
+
+// doAdopt moves .minecraft into the instances directory, links it back,
+// and shares its game files into the store so nothing is downloaded twice.
+func (c *Controller) doAdopt(ctx context.Context, id TaskID, name string) {
+	if name == "" {
+		name = instance.DefaultInstanceName
+	}
+	c.beginTask(id, TaskAdopt, "Adopting your .minecraft as "+name)
+	c.emit(Event{Apply: func(s *Store) {
+		s.UpdateTask(id, func(t *Task) { t.Phase = "Moving " + filepath.Base(c.Manager.MinecraftPath) })
+	}})
+
+	res, err := c.Manager.AdoptMinecraft(name)
+	if err != nil {
+		c.finishTask(id, err)
+		return
+	}
+
+	c.emit(Event{Apply: func(s *Store) {
+		s.UpdateTask(id, func(t *Task) { t.Phase = "Sharing its game files" })
+	}})
+	stats, err := launch.Harvest(ctx, c.Layout, res.Path, func(p launch.HarvestProgress) {
+		c.emit(Event{Apply: func(s *Store) {
+			s.UpdateTask(id, func(t *Task) {
+				t.Message = fmt.Sprintf("%d files, %s", p.Files, launch.FormatBytes(p.Bytes))
+			})
+		}})
+	})
+	if err != nil {
+		// The instance stands; only the sharing is missing, and the
+		// storage panel can do that later.
+		c.finishTask(id, fmt.Errorf("%s is adopted, but sharing its files failed: %w", name, err))
+	} else {
+		c.finishTask(id, nil)
+	}
+
+	status := fmt.Sprintf("Your %s is now the instance %s", filepath.Base(c.Manager.MinecraftPath), name)
+	switch {
+	case res.Detected:
+		status += fmt.Sprintf(" · %s %s", res.Meta.MinecraftVersion, res.Meta.Loader)
+	default:
+		status += " · open Settings to say what it runs"
+	}
+	if err == nil && stats.BytesShared > 0 {
+		status += " · " + launch.FormatBytes(stats.BytesShared) + " shared"
+	}
+	c.setStatus(status)
+	c.doRefresh(ctx)
+	c.doSelect(name)
 }
 
 // doRefresh reloads everything the window shows. It publishes in two steps:
@@ -515,6 +603,59 @@ func (c *Controller) doLoadContent(name string) {
 	c.emit(Event{Terminal: true, Apply: func(s *Store) {
 		s.SetContent(name, content)
 	}})
+	c.loadOptions(name)
+}
+
+// loadOptions publishes an instance's options.txt and its snapshots.
+func (c *Controller) loadOptions(name string) {
+	info, err := c.Manager.OptionsInfo(name)
+	if err != nil {
+		c.fail(err)
+		return
+	}
+	snapshots, err := c.Manager.ListOptionsSnapshots(name)
+	if err != nil {
+		c.fail(err)
+		return
+	}
+	c.emit(Event{Terminal: true, Apply: func(s *Store) {
+		s.SetOptions(name, info, snapshots)
+	}})
+}
+
+func (c *Controller) doSaveOptions(a ActionSaveOptions) {
+	snap, err := c.Manager.SaveOptions(a.Name, a.Label)
+	if err != nil {
+		c.fail(err)
+		return
+	}
+	c.setStatus("Saved the game options of " + a.Name + " as \"" + snap.Display() + "\"")
+	c.loadOptions(a.Name)
+}
+
+func (c *Controller) doRestoreOptions(a ActionRestoreOptions) {
+	kept, ok, err := c.Manager.RestoreOptions(a.Name, a.Snapshot)
+	if err != nil {
+		c.fail(err)
+		return
+	}
+	status := "Restored the game options of " + a.Name
+	if ok {
+		status += " · the previous ones are kept as \"" + kept.Display() + "\""
+	} else {
+		status += " · they already matched"
+	}
+	c.setStatus(status)
+	c.loadOptions(a.Name)
+}
+
+func (c *Controller) doDeleteOptionsSnapshot(a ActionDeleteOptionsSnapshot) {
+	if err := c.Manager.DeleteOptionsSnapshot(a.Name, a.Snapshot); err != nil {
+		c.fail(err)
+		return
+	}
+	c.setStatus("Removed an options snapshot of " + a.Name)
+	c.loadOptions(a.Name)
 }
 
 // describeMods fills in each jar's own name and version and orders the

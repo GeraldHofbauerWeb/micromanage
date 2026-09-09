@@ -4,10 +4,15 @@ import (
 	"fmt"
 	"image"
 
+	"gioui.org/font"
+	"gioui.org/io/event"
+	"gioui.org/io/pointer"
 	"gioui.org/layout"
 	"gioui.org/op"
+	"gioui.org/op/clip"
 	"gioui.org/unit"
 	"gioui.org/widget"
+	"gioui.org/widget/material"
 
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launcher"
@@ -42,8 +47,16 @@ func (u *ui) layoutHome(gtx layout.Context, snap launcher.Snapshot) layout.Dimen
 // railState holds the instance list's widgets.
 type railState struct {
 	list *widget.List
-	rows []widget.Clickable
+	rows []*railRow
 	add  widget.Clickable
+}
+
+// railRow is one instance's widgets: the row itself, its "⋯" button, and
+// the pointer tag that hears the right-click the row's clickable ignores.
+type railRow struct {
+	click widget.Clickable
+	more  widget.Clickable
+	tag   struct{}
 }
 
 func newRail() railState { return railState{list: newList()} }
@@ -51,11 +64,28 @@ func newRail() railState { return railState{list: newList()} }
 func (r *railState) Layout(gtx layout.Context, u *ui, snap launcher.Snapshot) layout.Dimensions {
 	th := u.th
 	for len(r.rows) < len(snap.Instances) {
-		r.rows = append(r.rows, widget.Clickable{})
+		r.rows = append(r.rows, &railRow{})
 	}
 	for i := range snap.Instances {
-		if r.rows[i].Clicked(gtx) {
-			u.ctrl.Dispatch(launcher.ActionSelect{Name: snap.Instances[i].Name})
+		inst := snap.Instances[i]
+		rr := r.rows[i]
+		if rr.click.Clicked(gtx) {
+			u.dispatch(launcher.ActionSelect{Name: inst.Name})
+		}
+		if rr.more.Clicked(gtx) {
+			u.openInstanceMenu(snap, inst)
+		}
+		for {
+			ev, ok := gtx.Event(pointer.Filter{Target: &rr.tag, Kinds: pointer.Press})
+			if !ok {
+				break
+			}
+			if e, ok := ev.(pointer.Event); ok && e.Kind == pointer.Press && e.Buttons == pointer.ButtonSecondary {
+				// A right-click selects too, so the workbench and the
+				// menu are about the same instance.
+				u.dispatch(launcher.ActionSelect{Name: inst.Name})
+				u.openInstanceMenu(snap, inst)
+			}
 		}
 	}
 	if r.add.Clicked(gtx) {
@@ -93,11 +123,16 @@ func (r *railState) Layout(gtx layout.Context, u *ui, snap launcher.Snapshot) la
 func (r *railState) layoutRow(gtx layout.Context, u *ui, snap launcher.Snapshot, i int) layout.Dimensions {
 	th := u.th
 	inst := snap.Instances[i]
+	rr := r.rows[i]
 	selected := inst.Name == snap.Selected
 	running := snap.Game.Running && snap.Game.Instance == inst.Name
+	showMore := rr.click.Hovered() || rr.more.Hovered() || selected
 
-	return th.selectableRow(gtx, &r.rows[i], selected, func(gtx layout.Context) layout.Dimensions {
-		return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10), Left: sp3, Right: sp3}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+	// The tag goes on before the row so the row's own clickable, drawn
+	// inside it, hands the press on to it as well.
+	macro := op.Record(gtx.Ops)
+	dims := th.selectableRow(gtx, &rr.click, selected, func(gtx layout.Context) layout.Dimensions {
+		return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10), Left: sp3, Right: unit.Dp(6)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			gtx.Constraints.Min.X = gtx.Constraints.Max.X
 			return row(gtx, unit.Dp(12),
 				rigid(func(gtx layout.Context) layout.Dimensions {
@@ -132,9 +167,88 @@ func (r *railState) layoutRow(gtx layout.Context, u *ui, snap launcher.Snapshot,
 					}
 					return layout.Dimensions{}
 				}),
+				rigid(func(gtx layout.Context) layout.Dimensions {
+					// The "⋯" is the discoverable way to the menu the
+					// right-click opens; it appears when the row does.
+					if !showMore {
+						return layout.Dimensions{Size: image.Pt(gtx.Dp(unit.Dp(32)), 0)}
+					}
+					return th.iconButton(gtx, &rr.more, u.ic.More)
+				}),
 			)
 		})
 	})
+	call := macro.Stop()
+
+	defer clip.Rect{Max: dims.Size}.Push(gtx.Ops).Pop()
+	event.Op(gtx.Ops, &rr.tag)
+	call.Add(gtx.Ops)
+	return dims
+}
+
+// openInstanceMenu shows what can be done to an instance from the list,
+// at the pointer.
+func (u *ui) openInstanceMenu(snap launcher.Snapshot, inst instance.Instance) {
+	u.menu.show(u.pointer, inst.Name, u.instanceMenu(snap, inst))
+}
+
+// instanceMenu builds the items. The same things live on the workbench;
+// here they are one click from the list, whichever instance is selected.
+func (u *ui) instanceMenu(snap launcher.Snapshot, inst instance.Instance) []menuItem {
+	running := snap.Game.Running && snap.Game.Instance == inst.Name
+	name := inst.Name
+
+	play := menuItem{label: "Play", icon: u.ic.Play}
+	switch {
+	case running:
+		play = menuItem{label: "Stop game", icon: u.ic.Stop, do: func() { u.dispatch(launcher.ActionStopGame{}) }}
+	case !snap.HasAccount:
+		play.note = "sign in first"
+	case !inst.Configured:
+		play.note = "not set up"
+	case taskActive(snap.Task) && snap.Task.Kind == launcher.TaskLaunch:
+		play.note = "launching"
+	default:
+		play.do = func() { u.dispatch(launcher.ActionLaunch{Name: name}) }
+	}
+
+	settingsTab := len(benchTabs()) - 1
+	openTab := func(tab int) func() {
+		return func() {
+			u.dispatch(launcher.ActionSelect{Name: name})
+			u.bench.shownFor = name
+			u.bench.tab = tab
+		}
+	}
+
+	del := menuItem{label: "Delete…", icon: u.ic.Delete, danger: true, divider: true}
+	if inst.IsActive {
+		del.note = "active"
+	} else {
+		del.do = func() { u.dialogs.openDelete(inst) }
+	}
+
+	return []menuItem{
+		play,
+		{label: "Overview", icon: u.ic.Info, do: openTab(0)},
+		{label: "Settings", icon: u.ic.Settings, do: openTab(settingsTab)},
+		{label: "Instance folder", icon: u.ic.Folder, do: func() { u.dispatch(launcher.ActionOpen{Path: inst.Path}) }},
+		{label: "Duplicate…", icon: u.ic.Add, divider: true, do: func() {
+			// The dialog takes the version from the selected instance's
+			// metadata, so ask for the state as it is now.
+			u.dialogs.openCreate(u.currentSnapshot(snap), name)
+		}},
+		del,
+	}
+}
+
+// currentSnapshot is the live state when there is a controller, or the
+// one given when there is not.
+func (u *ui) currentSnapshot(fallback launcher.Snapshot) launcher.Snapshot {
+	if u.ctrl == nil {
+		return fallback
+	}
+	return u.ctrl.Store().Snapshot()
 }
 
 // --- workbench ---
@@ -247,28 +361,59 @@ func (w *workbench) Layout(gtx layout.Context, u *ui, snap launcher.Snapshot) la
 	)
 }
 
-// layoutEmpty is the workbench with nothing on it.
+// layoutEmpty is the workbench with nothing on it: the mark, the name, and
+// the one thing to do next. It is the first thing a new player sees and
+// the resting state between instances, so it is the icon at a size where
+// its three blocks read as what they are, and little else.
 func (w *workbench) layoutEmpty(gtx layout.Context, u *ui, snap launcher.Snapshot) layout.Dimensions {
 	th := u.th
 	if w.newFirst.Clicked(gtx) {
 		u.dialogs.openCreate(snap, "")
 	}
+	adopting := taskActive(snap.Task) && snap.Task.Kind == launcher.TaskAdopt
+
+	var active string
+	for _, inst := range snap.Instances {
+		if inst.IsActive {
+			active = inst.Name
+		}
+	}
+
 	return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx,
-			rigid(func(gtx layout.Context) layout.Dimensions { return slab(gtx, th.P.Line, unit.Dp(56)) }),
+			rigid(func(gtx layout.Context) layout.Dimensions { return mark(gtx, unit.Dp(132)) }),
 			spacer(sp4),
 			rigid(func(gtx layout.Context) layout.Dimensions {
-				if len(snap.Instances) == 0 {
+				l := material.Label(th.Theme, unit.Sp(32), "Instance Manager")
+				l.Font.Typeface = faceDisplay
+				l.Font.Weight = font.Bold
+				l.Color = th.P.Text
+				return l.Layout(gtx)
+			}),
+			spacer(sp2),
+			rigid(func(gtx layout.Context) layout.Dimensions {
+				switch {
+				case adopting:
+					return th.mid(gtx, "Moving your .minecraft in as the first instance…")
+				case len(snap.Instances) == 0:
 					return th.mid(gtx, "Make your first instance to get started.")
 				}
-				return th.mid(gtx, "Pick an instance on the left.")
+				return th.mid(gtx, "Pick an instance on the left, or right-click one.")
 			}),
-			spacer(sp3),
+			spacer(sp4),
 			rigid(func(gtx layout.Context) layout.Dimensions {
-				if len(snap.Instances) > 0 {
-					return layout.Dimensions{}
+				switch {
+				case adopting:
+					gtx.Constraints.Max.X = gtx.Dp(unit.Dp(220))
+					return th.progress(gtx, taskFraction(snap.Task), unit.Dp(3))
+				case len(snap.Instances) == 0:
+					return th.primary(gtx, &w.newFirst, u.ic.Add, "New instance")
 				}
-				return th.primary(gtx, &w.newFirst, u.ic.Add, "New instance")
+				line := fmt.Sprintf("%d instances", len(snap.Instances))
+				if active != "" {
+					line += " · " + active + " is active"
+				}
+				return th.monoIn(gtx, line, th.P.TextDim)
 			}),
 		)
 	})
