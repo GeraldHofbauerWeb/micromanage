@@ -83,7 +83,9 @@ from the application menu.
    very first start, with no instances yet, your existing `.minecraft` is
    moved in as the instance *Default* — renamed rather than copied, and
    linked back — so the worlds, mods and settings already there are the
-   first instance. Right-click an instance, or press its **⋯**, for Play,
+   first instance. The start screen offers to play the active instance —
+   the one `.minecraft` points to, which the official launcher would start
+   too. Right-click an instance, or press its **⋯**, for Play, Set active,
    Overview, Settings, its folder, Duplicate and Delete. The version
    fields open a list — Minecraft releases from Mojang, loader builds from the
    loader's own service — with a filter, and accept a typed version the list

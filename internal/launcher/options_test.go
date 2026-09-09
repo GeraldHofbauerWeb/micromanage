@@ -94,3 +94,34 @@ func TestFirstRefreshAdoptsMinecraft(t *testing.T) {
 		t.Errorf("second refresh failed: %v", snap.Err)
 	}
 }
+
+// TestSetActiveMovesTheLink points .minecraft at another instance.
+func TestSetActiveMovesTheLink(t *testing.T) {
+	ctrl := newTestController(t, nil)
+	m := isolateInstances(t, ctrl)
+	m.BackupPath = filepath.Join(m.AppDir, "backup")
+	for _, name := range []string{"a", "b"} {
+		if err := os.MkdirAll(filepath.Join(m.InstancesPath, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(filepath.Join(m.InstancesPath, "a"), m.MinecraftPath); err != nil {
+		t.Fatal(err)
+	}
+
+	ctrl.Dispatch(ActionSetActive{Name: "b"})
+	snap := waitFor(t, ctrl, "b active", func(s Snapshot) bool {
+		for _, inst := range s.Instances {
+			if inst.Name == "b" && inst.IsActive {
+				return true
+			}
+		}
+		return false
+	})
+	if snap.Err != nil {
+		t.Fatal(snap.Err)
+	}
+	if target, _ := os.Readlink(m.MinecraftPath); filepath.Base(target) != "b" {
+		t.Errorf(".minecraft -> %q", target)
+	}
+}

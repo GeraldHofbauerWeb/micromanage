@@ -73,8 +73,11 @@ func TestRightClickOpensTheInstanceMenu(t *testing.T) {
 	if u.menu.at != hit {
 		t.Errorf("menu at %v, pointer was at %v", u.menu.at, hit)
 	}
-	if len(u.menu.items) == 0 || u.menu.items[0].label != "Play" || u.menu.items[0].do == nil {
+	if len(u.menu.items) < 2 || u.menu.items[0].label != "Play" || u.menu.items[0].do == nil {
 		t.Errorf("first item = %+v, want an enabled Play", u.menu.items)
+	}
+	if item := u.menu.items[1]; item.label != "Set active" || item.do == nil {
+		t.Errorf("second item = %+v, want an enabled Set active", item)
 	}
 	last := u.menu.items[len(u.menu.items)-1]
 	if last.label != "Delete…" || last.do == nil {
@@ -95,5 +98,8 @@ func TestRightClickOpensTheInstanceMenu(t *testing.T) {
 	last = u.menu.items[len(u.menu.items)-1]
 	if last.do != nil || last.note != "active" {
 		t.Errorf("delete item for the active instance = %+v", last)
+	}
+	if item := u.menu.items[1]; item.do != nil || item.note == "" {
+		t.Errorf("set active for the active instance = %+v, want inert with a note", item)
 	}
 }

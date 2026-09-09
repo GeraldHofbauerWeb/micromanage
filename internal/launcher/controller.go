@@ -110,6 +110,9 @@ type (
 	ActionDeleteOptionsSnapshot struct{ Name, Snapshot string }
 	// ActionAdopt turns the current .minecraft into an instance.
 	ActionAdopt struct{ Name string }
+	// ActionSetActive points .minecraft at an instance, which is what the
+	// official launcher and anything else reading that directory then see.
+	ActionSetActive struct{ Name string }
 )
 
 func (ActionRefresh) isAction()        {}
@@ -141,6 +144,7 @@ func (ActionSaveOptions) isAction()           {}
 func (ActionRestoreOptions) isAction()        {}
 func (ActionDeleteOptionsSnapshot) isAction() {}
 func (ActionAdopt) isAction()                 {}
+func (ActionSetActive) isAction()             {}
 
 // Event is a state change produced by a worker.
 type Event struct {
@@ -352,7 +356,19 @@ func (c *Controller) run(ctx context.Context, id TaskID, a Action) {
 		c.doDeleteOptionsSnapshot(action)
 	case ActionAdopt:
 		c.doAdopt(ctx, id, action.Name)
+	case ActionSetActive:
+		c.doSetActive(ctx, action.Name)
 	}
+}
+
+// doSetActive makes an instance the one .minecraft links to.
+func (c *Controller) doSetActive(ctx context.Context, name string) {
+	if err := c.Manager.SwitchInstance(name); err != nil {
+		c.fail(err)
+		return
+	}
+	c.setStatus(name + " is the active instance now · " + filepath.Base(c.Manager.MinecraftPath) + " points to it")
+	c.doRefresh(ctx)
 }
 
 // maybeAdopt runs the first-run adoption: with no instances yet and a real
