@@ -22,7 +22,6 @@ type Screen int
 const (
 	ScreenLogin Screen = iota
 	ScreenInstances
-	ScreenEdit
 	ScreenSettings
 )
 
@@ -38,6 +37,7 @@ const (
 	TaskCreate  TaskKind = "create"
 	TaskDelete  TaskKind = "delete"
 	TaskHarvest TaskKind = "harvest"
+	TaskReclaim TaskKind = "reclaim"
 	TaskDetect  TaskKind = "detect"
 	TaskLogin   TaskKind = "login"
 )
@@ -100,10 +100,11 @@ type Snapshot struct {
 	Editing   instance.Meta
 	EditingOK bool
 
-	// LoaderOverride is a per-launch choice that is not written to the
-	// instance. Empty means the instance's own default is used.
-	LoaderOverride instance.LoaderSpec
-	HasOverride    bool
+	// Content is what the selected instance holds, per kind, and ContentFor
+	// names the instance it was listed for so a stale listing is never shown
+	// against a newly selected one.
+	Content    map[instance.ContentKind][]instance.Entry
+	ContentFor string
 
 	Runtimes []java.Runtime
 	Config   map[string]string
@@ -135,12 +136,12 @@ type Store struct {
 	accounts   []auth.Account
 	activeAcct string
 
-	instances      []instance.Instance
-	selected       string
-	editing        instance.Meta
-	editingOK      bool
-	loaderOverride instance.LoaderSpec
-	hasOverride    bool
+	instances  []instance.Instance
+	selected   string
+	editing    instance.Meta
+	editingOK  bool
+	content    map[instance.ContentKind][]instance.Entry
+	contentFor string
 
 	runtimes []java.Runtime
 	config   map[string]string
@@ -172,24 +173,24 @@ func (s *Store) Snapshot() Snapshot {
 	defer s.mu.RUnlock()
 
 	snap := Snapshot{
-		Screen:         s.screen,
-		Accounts:       append([]auth.Account(nil), s.accounts...),
-		Instances:      append([]instance.Instance(nil), s.instances...),
-		Selected:       s.selected,
-		Editing:        s.editing,
-		EditingOK:      s.editingOK,
-		LoaderOverride: s.loaderOverride,
-		HasOverride:    s.hasOverride,
-		Runtimes:       append([]java.Runtime(nil), s.runtimes...),
-		Config:         make(map[string]string, len(s.config)),
-		Task:           s.task,
-		Game:           s.game,
-		Login:          s.login,
-		MSAConfigured:  s.msaConfigured,
-		Status:         s.status,
-		Err:            s.err,
-		Reclaimable:    make(map[string]int64, len(s.reclaimable)),
-		StoreSize:      s.storeSize,
+		Screen:        s.screen,
+		Accounts:      append([]auth.Account(nil), s.accounts...),
+		Instances:     append([]instance.Instance(nil), s.instances...),
+		Selected:      s.selected,
+		Editing:       s.editing,
+		EditingOK:     s.editingOK,
+		ContentFor:    s.contentFor,
+		Content:       make(map[instance.ContentKind][]instance.Entry, len(s.content)),
+		Runtimes:      append([]java.Runtime(nil), s.runtimes...),
+		Config:        make(map[string]string, len(s.config)),
+		Task:          s.task,
+		Game:          s.game,
+		Login:         s.login,
+		MSAConfigured: s.msaConfigured,
+		Status:        s.status,
+		Err:           s.err,
+		Reclaimable:   make(map[string]int64, len(s.reclaimable)),
+		StoreSize:     s.storeSize,
 	}
 	snap.Task.Steps = append([]string(nil), s.task.Steps...)
 	snap.Game.Tail = append([]string(nil), s.game.Tail...)
@@ -198,6 +199,9 @@ func (s *Store) Snapshot() Snapshot {
 	}
 	for k, v := range s.reclaimable {
 		snap.Reclaimable[k] = v
+	}
+	for k, v := range s.content {
+		snap.Content[k] = append([]instance.Entry(nil), v...)
 	}
 
 	for _, a := range s.accounts {
@@ -237,25 +241,22 @@ func (s *Store) SetInstances(list []instance.Instance) {
 func (s *Store) SetSelected(name string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.selected != name {
-		// A new selection drops a launch-only loader override, which belonged
-		// to the instance being left.
-		s.loaderOverride = instance.LoaderSpec{}
-		s.hasOverride = false
-	}
 	s.selected = name
+}
+
+// SetContent publishes the listing of one instance, replacing whatever was
+// listed for any other.
+func (s *Store) SetContent(name string, content map[instance.ContentKind][]instance.Entry) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.contentFor = name
+	s.content = content
 }
 
 func (s *Store) SetEditing(meta instance.Meta, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.editing, s.editingOK = meta, ok
-}
-
-func (s *Store) SetLoaderOverride(spec instance.LoaderSpec, has bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.loaderOverride, s.hasOverride = spec, has
 }
 
 func (s *Store) SetAccounts(list []auth.Account, active string) {
@@ -364,11 +365,11 @@ func (s Snapshot) SelectedInstance() (instance.Instance, bool) {
 	return instance.Instance{}, false
 }
 
-// EffectiveLoader returns the loader a launch would use: the override when one
-// is set, otherwise the instance's own default.
-func (s Snapshot) EffectiveLoader() instance.LoaderSpec {
-	if s.HasOverride {
-		return s.LoaderOverride
+// ContentOf returns the listed entries of one kind for the selected
+// instance, or nil while the listing is for another instance.
+func (s Snapshot) ContentOf(kind instance.ContentKind) []instance.Entry {
+	if s.ContentFor != s.Selected {
+		return nil
 	}
-	return s.Editing.Loader
+	return s.Content[kind]
 }

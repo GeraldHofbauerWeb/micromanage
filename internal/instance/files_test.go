@@ -33,7 +33,7 @@ func mkInstance(t *testing.T, m *Manager, name string) string {
 	return path
 }
 
-func TestDeleteInstanceFileRejectsTraversal(t *testing.T) {
+func TestDeleteContentRejectsTraversal(t *testing.T) {
 	m := newTestManager(t)
 	mkInstance(t, m, "pack")
 
@@ -55,8 +55,8 @@ func TestDeleteInstanceFileRejectsTraversal(t *testing.T) {
 	}
 	for _, name := range bad {
 		t.Run("name="+name, func(t *testing.T) {
-			if err := m.DeleteInstanceFile("pack", KindMod, name); err == nil {
-				t.Fatalf("DeleteInstanceFile(%q) = nil, want an error", name)
+			if err := m.DeleteContent("pack", ContentMods, name); err == nil {
+				t.Fatalf("DeleteContent(%q) = nil, want an error", name)
 			}
 		})
 	}
@@ -66,30 +66,30 @@ func TestDeleteInstanceFileRejectsTraversal(t *testing.T) {
 	}
 }
 
-func TestDeleteInstanceFileRejectsBadInstanceName(t *testing.T) {
+func TestDeleteContentRejectsBadInstanceName(t *testing.T) {
 	m := newTestManager(t)
 	mkInstance(t, m, "pack")
 
 	for _, name := range []string{"../pack", "..", "", "a/b"} {
-		if err := m.DeleteInstanceFile(name, KindMod, "x.jar"); err == nil {
-			t.Errorf("DeleteInstanceFile(instance=%q) = nil, want an error", name)
+		if err := m.DeleteContent(name, ContentMods, "x.jar"); err == nil {
+			t.Errorf("DeleteContent(instance=%q) = nil, want an error", name)
 		}
 	}
 }
 
-func TestDeleteInstanceFileRemovesEachKind(t *testing.T) {
+func TestDeleteContentRemovesEachKind(t *testing.T) {
 	m := newTestManager(t)
 	path := mkInstance(t, m, "pack")
 
 	cases := []struct {
-		kind  FileKind
+		kind  ContentKind
 		dir   string
 		name  string
 		isDir bool
 	}{
-		{KindMod, "mods", "cool-mod.jar", false},
-		{KindConfig, "config", "settings.toml", false},
-		{KindSave, "saves", "My World", true},
+		{ContentMods, "mods", "cool-mod.jar", false},
+		{ContentConfig, "config", "settings.toml", false},
+		{ContentSaves, "saves", "My World", true},
 	}
 
 	for _, tc := range cases {
@@ -102,8 +102,8 @@ func TestDeleteInstanceFileRemovesEachKind(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := m.DeleteInstanceFile("pack", tc.kind, tc.name); err != nil {
-			t.Fatalf("DeleteInstanceFile(%s): %v", tc.kind, err)
+		if err := m.DeleteContent("pack", tc.kind, tc.name); err != nil {
+			t.Fatalf("DeleteContent(%s): %v", tc.kind, err)
 		}
 		if _, err := os.Lstat(target); !os.IsNotExist(err) {
 			t.Errorf("%s still present after delete", target)
@@ -111,7 +111,7 @@ func TestDeleteInstanceFileRemovesEachKind(t *testing.T) {
 	}
 }
 
-func TestDeleteInstanceFileSymlinkEscape(t *testing.T) {
+func TestDeleteContentSymlinkEscape(t *testing.T) {
 	m := newTestManager(t)
 	path := mkInstance(t, m, "pack")
 
@@ -131,7 +131,7 @@ func TestDeleteInstanceFileSymlinkEscape(t *testing.T) {
 	}
 
 	// Deleting the link itself is legitimate and must not follow it.
-	if err := m.DeleteInstanceFile("pack", KindMod, "escape"); err != nil {
+	if err := m.DeleteContent("pack", ContentMods, "escape"); err != nil {
 		t.Fatalf("deleting the symlink failed: %v", err)
 	}
 	if _, err := os.Stat(victim); err != nil {
@@ -139,11 +139,11 @@ func TestDeleteInstanceFileSymlinkEscape(t *testing.T) {
 	}
 }
 
-func TestDeleteInstanceFileUnknownKind(t *testing.T) {
+func TestDeleteContentUnknownKind(t *testing.T) {
 	m := newTestManager(t)
 	mkInstance(t, m, "pack")
 
-	if err := m.DeleteInstanceFile("pack", FileKind("screenshot"), "x.png"); err == nil {
+	if err := m.DeleteContent("pack", ContentKind("nonsense"), "x.png"); err == nil {
 		t.Fatal("unknown kind accepted, want an error")
 	}
 }

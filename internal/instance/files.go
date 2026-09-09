@@ -7,29 +7,6 @@ import (
 	"strings"
 )
 
-// FileKind identifies which of an instance's content directories a file lives in.
-type FileKind string
-
-const (
-	KindMod    FileKind = "mod"
-	KindConfig FileKind = "config"
-	KindSave   FileKind = "save"
-)
-
-// dir maps a kind to its directory name inside an instance.
-func (k FileKind) dir() (string, error) {
-	switch k {
-	case KindMod:
-		return "mods", nil
-	case KindConfig:
-		return "config", nil
-	case KindSave:
-		return "saves", nil
-	default:
-		return "", fmt.Errorf("unknown file type: %s", k)
-	}
-}
-
 // validateName rejects anything that is not a single, literal path component.
 // Comparing against filepath.Base in one shot rules out "..", "a/b", absolute
 // paths and trailing separators alike; label names the value for the error.
@@ -77,40 +54,4 @@ func (m *Manager) CanDelete(name string) error {
 		return fmt.Errorf("cannot delete active instance '%s'. Switch to another instance first", name)
 	}
 	return nil
-}
-
-// DeleteInstanceFile removes a single mod, config file or save from an
-// instance. Both the instance name and the file name are validated, and the
-// resolved path is re-checked against the instance directory, so a crafted
-// name cannot reach outside it.
-//
-// Note that a save is a directory: deleting one removes the whole world.
-func (m *Manager) DeleteInstanceFile(instanceName string, kind FileKind, name string) error {
-	instancePath, err := m.InstancePath(instanceName)
-	if err != nil {
-		return err
-	}
-	subdir, err := kind.dir()
-	if err != nil {
-		return err
-	}
-	if err := validateName("file name", name); err != nil {
-		return err
-	}
-
-	target := filepath.Join(instancePath, subdir, name)
-
-	// Belt and braces: the name checks above already rule this out, but a
-	// containment check costs nothing and survives future refactoring.
-	rel, err := filepath.Rel(instancePath, target)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return fmt.Errorf("invalid file name: %q escapes the instance directory", name)
-	}
-
-	// Lstat, not Stat: a dangling symlink still exists and should be removable.
-	if _, err := os.Lstat(target); os.IsNotExist(err) {
-		return fmt.Errorf("%s does not exist", name)
-	}
-
-	return os.RemoveAll(target)
 }

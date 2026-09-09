@@ -107,48 +107,6 @@ func TestStoreSnapshotIsACopy(t *testing.T) {
 	}
 }
 
-// TestSelectionDropsLoaderOverride covers a subtle correctness point: an
-// override belongs to the instance it was made for, so moving to another must
-// not carry it over.
-func TestSelectionDropsLoaderOverride(t *testing.T) {
-	s := NewStore()
-	s.SetSelected("pack")
-	s.SetLoaderOverride(instance.LoaderSpec{Type: instance.LoaderFabric, Version: "0.15.7"}, true)
-
-	if !s.Snapshot().HasOverride {
-		t.Fatal("the override was not recorded")
-	}
-
-	s.SetSelected("other")
-	if s.Snapshot().HasOverride {
-		t.Error("the override survived a change of instance")
-	}
-
-	// Re-selecting the same instance must not clear it.
-	s.SetSelected("other")
-	s.SetLoaderOverride(instance.LoaderSpec{Type: instance.LoaderQuilt}, true)
-	s.SetSelected("other")
-	if !s.Snapshot().HasOverride {
-		t.Error("re-selecting the same instance cleared the override")
-	}
-}
-
-func TestEffectiveLoader(t *testing.T) {
-	base := instance.LoaderSpec{Type: instance.LoaderNeoForge, Version: "21.1.248"}
-	override := instance.LoaderSpec{Type: instance.LoaderFabric, Version: "0.15.7"}
-
-	snap := Snapshot{Editing: instance.Meta{Loader: base}}
-	if snap.EffectiveLoader() != base {
-		t.Error("without an override the instance's own loader must be used")
-	}
-
-	snap.LoaderOverride, snap.HasOverride = override, true
-	if snap.EffectiveLoader() != override {
-		t.Error("with an override the override must be used")
-	}
-}
-
-// TestSetInstancesClearsStaleSelection covers a deleted instance.
 func TestSetInstancesClearsStaleSelection(t *testing.T) {
 	s := NewStore()
 	s.SetInstances([]instance.Instance{{Name: "a"}, {Name: "b"}})

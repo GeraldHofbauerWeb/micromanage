@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/auth"
+	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/desktop"
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/download"
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/java"
@@ -49,17 +51,27 @@ type (
 	}
 	// ActionDetect fills an instance's settings from what is on disk.
 	ActionDetect struct{ Name string }
-	// ActionDeleteFile removes one mod, config or save.
-	ActionDeleteFile struct {
+	// ActionRename gives an instance a new name.
+	ActionRename struct{ Name, NewName string }
+	// ActionLoadContent lists everything an instance holds.
+	ActionLoadContent struct{ Name string }
+	// ActionSetEnabled switches a mod on or off.
+	ActionSetEnabled struct {
+		Name    string
+		Kind    instance.ContentKind
+		File    string
+		Enabled bool
+	}
+	// ActionDeleteContent removes one mod, config file, world, pack or log.
+	ActionDeleteContent struct {
 		Name string
-		Kind instance.FileKind
+		Kind instance.ContentKind
 		File string
 	}
-	// ActionSetLoaderOverride changes the loader for the next launch only.
-	ActionSetLoaderOverride struct {
-		Spec instance.LoaderSpec
-		Set  bool
-	}
+	// ActionOpen hands a file, folder or link to the desktop.
+	ActionOpen struct{ Path string }
+	// ActionReveal shows a file in the file manager.
+	ActionReveal struct{ Path string }
 	// ActionLaunch starts the selected instance.
 	ActionLaunch struct{ Name string }
 	// ActionStopGame asks a running game to close.
@@ -68,26 +80,34 @@ type (
 	ActionHarvest struct{}
 	// ActionScanStorage measures what each instance could share.
 	ActionScanStorage struct{}
+	// ActionReclaim removes from the instances the game files the shared
+	// store already holds.
+	ActionReclaim struct{}
 	// ActionSetConfig changes a manager configuration key.
 	ActionSetConfig struct{ Key, Value string }
 )
 
-func (ActionRefresh) isAction()           {}
-func (ActionSelect) isAction()            {}
-func (ActionLoginOffline) isAction()      {}
-func (ActionLoginMicrosoft) isAction()    {}
-func (ActionSignOut) isAction()           {}
-func (ActionCreate) isAction()            {}
-func (ActionDelete) isAction()            {}
-func (ActionSaveMeta) isAction()          {}
-func (ActionDetect) isAction()            {}
-func (ActionDeleteFile) isAction()        {}
-func (ActionSetLoaderOverride) isAction() {}
-func (ActionLaunch) isAction()            {}
-func (ActionStopGame) isAction()          {}
-func (ActionHarvest) isAction()           {}
-func (ActionScanStorage) isAction()       {}
-func (ActionSetConfig) isAction()         {}
+func (ActionRefresh) isAction()        {}
+func (ActionSelect) isAction()         {}
+func (ActionLoginOffline) isAction()   {}
+func (ActionLoginMicrosoft) isAction() {}
+func (ActionSignOut) isAction()        {}
+func (ActionCreate) isAction()         {}
+func (ActionDelete) isAction()         {}
+func (ActionSaveMeta) isAction()       {}
+func (ActionDetect) isAction()         {}
+func (ActionRename) isAction()         {}
+func (ActionLoadContent) isAction()    {}
+func (ActionSetEnabled) isAction()     {}
+func (ActionDeleteContent) isAction()  {}
+func (ActionOpen) isAction()           {}
+func (ActionReveal) isAction()         {}
+func (ActionLaunch) isAction()         {}
+func (ActionStopGame) isAction()       {}
+func (ActionHarvest) isAction()        {}
+func (ActionScanStorage) isAction()    {}
+func (ActionReclaim) isAction()        {}
+func (ActionSetConfig) isAction()      {}
 
 // Event is a state change produced by a worker.
 type Event struct {
@@ -239,18 +259,30 @@ func (c *Controller) run(ctx context.Context, id TaskID, a Action) {
 		c.doSaveMeta(action)
 	case ActionDetect:
 		c.doDetect(action.Name)
-	case ActionDeleteFile:
-		c.doDeleteFile(action)
-	case ActionSetLoaderOverride:
-		c.emit(Event{Terminal: true, Apply: func(s *Store) {
-			s.SetLoaderOverride(action.Spec, action.Set)
-		}})
+	case ActionRename:
+		c.doRename(ctx, action)
+	case ActionLoadContent:
+		c.doLoadContent(action.Name)
+	case ActionSetEnabled:
+		c.doSetEnabled(action)
+	case ActionDeleteContent:
+		c.doDeleteContent(action)
+	case ActionOpen:
+		if err := desktop.Open(action.Path); err != nil {
+			c.fail(fmt.Errorf("could not open %s: %w", filepath.Base(action.Path), err))
+		}
+	case ActionReveal:
+		if err := desktop.Reveal(action.Path); err != nil {
+			c.fail(fmt.Errorf("could not show %s: %w", filepath.Base(action.Path), err))
+		}
 	case ActionLaunch:
 		c.doLaunch(ctx, id, action.Name)
 	case ActionStopGame:
 		c.doStopGame()
 	case ActionHarvest:
 		c.doHarvest(ctx, id)
+	case ActionReclaim:
+		c.doReclaim(ctx, id)
 	case ActionScanStorage:
 		c.doScanStorage(ctx)
 	case ActionSetConfig:
@@ -307,6 +339,74 @@ func (c *Controller) doSelect(name string) {
 		s.SetSelected(name)
 		s.SetEditing(meta, ok)
 	}})
+	c.doLoadContent(name)
+}
+
+// doLoadContent lists every kind of content at once. Eight directory reads
+// and one walk of config/ cost a few milliseconds, so there is nothing to
+// gain from listing lazily and a lot of state to lose track of.
+func (c *Controller) doLoadContent(name string) {
+	if name == "" {
+		return
+	}
+	content := make(map[instance.ContentKind][]instance.Entry, len(instance.ContentKinds()))
+	for _, kind := range instance.ContentKinds() {
+		entries, err := c.Manager.ListContent(name, kind)
+		if err != nil {
+			c.fail(err)
+			return
+		}
+		content[kind] = entries
+	}
+	c.emit(Event{Terminal: true, Apply: func(s *Store) {
+		s.SetContent(name, content)
+	}})
+}
+
+// refreshInstances reloads the instance list only, for after a change that
+// touched an instance's contents. The Java scan is not repeated.
+func (c *Controller) refreshInstances() {
+	instances, err := c.Manager.ListInstances()
+	if err != nil {
+		c.fail(err)
+		return
+	}
+	c.emit(Event{Terminal: true, Apply: func(s *Store) { s.SetInstances(instances) }})
+}
+
+func (c *Controller) doRename(ctx context.Context, a ActionRename) {
+	if err := c.Manager.RenameInstance(a.Name, a.NewName); err != nil {
+		c.fail(err)
+		return
+	}
+	c.setStatus("Renamed " + a.Name + " to " + a.NewName)
+	c.doRefresh(ctx)
+	c.doSelect(a.NewName)
+}
+
+func (c *Controller) doSetEnabled(a ActionSetEnabled) {
+	newName, err := c.Manager.SetContentEnabled(a.Name, a.Kind, a.File, a.Enabled)
+	if err != nil {
+		c.fail(err)
+		return
+	}
+	if a.Enabled {
+		c.setStatus("Enabled " + newName)
+	} else {
+		c.setStatus("Disabled " + strings.TrimSuffix(newName, instance.DisabledSuffix))
+	}
+	c.doLoadContent(a.Name)
+	c.refreshInstances()
+}
+
+func (c *Controller) doDeleteContent(a ActionDeleteContent) {
+	if err := c.Manager.DeleteContent(a.Name, a.Kind, a.File); err != nil {
+		c.fail(err)
+		return
+	}
+	c.setStatus("Deleted " + a.File)
+	c.doLoadContent(a.Name)
+	c.refreshInstances()
 }
 
 func (c *Controller) doLoginOffline(name string) {
@@ -525,7 +625,13 @@ func (c *Controller) doDelete(ctx context.Context, name string) {
 		c.fail(err)
 		return
 	}
-	c.setStatus("Deleted " + name)
+	c.emit(Event{Terminal: true, Apply: func(s *Store) {
+		if s.Snapshot().Selected == name {
+			s.SetSelected("")
+			s.SetContent("", nil)
+		}
+		s.SetStatus("Deleted " + name)
+	}})
 	c.doRefresh(ctx)
 }
 
@@ -563,14 +669,6 @@ func (c *Controller) doDetect(name string) {
 	}})
 }
 
-func (c *Controller) doDeleteFile(a ActionDeleteFile) {
-	if err := c.Manager.DeleteInstanceFile(a.Name, a.Kind, a.File); err != nil {
-		c.fail(err)
-		return
-	}
-	c.setStatus("Deleted " + a.File)
-}
-
 func (c *Controller) doSetConfig(ctx context.Context, a ActionSetConfig) {
 	if err := c.Manager.UpdateConfig(a.Key, a.Value); err != nil {
 		c.fail(err)
@@ -599,7 +697,7 @@ func (c *Controller) doScanStorage(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		size, err := launch.Reclaimable(inst.Path)
+		size, err := launch.Reclaimable(c.Layout, inst.Path)
 		if err != nil {
 			continue
 		}
@@ -648,6 +746,42 @@ func (c *Controller) doHarvest(ctx context.Context, id TaskID) {
 	c.doRefresh(ctx)
 }
 
+// doReclaim frees the copies the store has made redundant, one instance at
+// a time, then measures again so the storage panel shows what is left.
+func (c *Controller) doReclaim(ctx context.Context, id TaskID) {
+	c.beginTask(id, TaskReclaim, "Freeing space")
+
+	instances, err := c.Manager.ListInstances()
+	if err != nil {
+		c.finishTask(id, err)
+		return
+	}
+
+	var total launch.ReclaimStats
+	for _, inst := range instances {
+		if err := ctx.Err(); err != nil {
+			c.finishTask(id, err)
+			return
+		}
+		name := inst.Name
+		c.emit(Event{Apply: func(s *Store) {
+			s.UpdateTask(id, func(t *Task) { t.Phase = name })
+		}})
+		stats, err := launch.Reclaim(ctx, c.Layout, inst.Path, false)
+		if err != nil {
+			c.finishTask(id, err)
+			return
+		}
+		total.Files += stats.Files
+		total.Bytes += stats.Bytes
+		c.emit(Event{Apply: func(s *Store) { s.SetReclaimable(name, 0) }})
+	}
+
+	c.finishTask(id, nil)
+	c.setStatus(fmt.Sprintf("Freed %s across %d files", launch.FormatBytes(total.Bytes), total.Files))
+	c.doRefresh(ctx)
+}
+
 // doLaunch runs the whole path from an instance to a running game.
 func (c *Controller) doLaunch(ctx context.Context, id TaskID, name string) {
 	started := time.Now()
@@ -670,12 +804,7 @@ func (c *Controller) doLaunch(ctx context.Context, id TaskID, name string) {
 		return
 	}
 
-	snap := c.store.Snapshot()
 	loader := meta.Loader
-	if snap.HasOverride {
-		loader = snap.LoaderOverride
-	}
-
 	versionID, err := versionIDFor(meta, loader)
 	if err != nil {
 		c.finishTask(id, err)

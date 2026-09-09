@@ -41,12 +41,15 @@ type Manager struct {
 }
 
 type Instance struct {
-	Name        string
-	Path        string
-	ModCount    int
-	ConfigCount int
-	SaveCount   int
-	IsActive    bool
+	Name string
+	Path string
+	// ModCount counts the mods that will load; DisabledMods the ones
+	// switched off and kept.
+	ModCount     int
+	DisabledMods int
+	ConfigCount  int
+	SaveCount    int
+	IsActive     bool
 
 	// v2 metadata, read from instance.json. Instances created before it
 	// existed report Configured false and leave the rest zero.
@@ -54,13 +57,6 @@ type Instance struct {
 	MinecraftVersion string
 	Loader           LoaderSpec
 	LastPlayed       time.Time
-}
-
-type InstanceInfo struct {
-	ModsDir    []string
-	ConfigsDir []string
-	SavesDir   []string
-	OtherFiles []string
 }
 
 func NewManager() (*Manager, error) {
@@ -440,7 +436,7 @@ func (m *Manager) ListInstances() ([]Instance, error) {
 
 		// Count mods
 		modsPath := filepath.Join(instancePath, "mods")
-		instance.ModCount = countJarFiles(modsPath)
+		instance.ModCount, instance.DisabledMods = countMods(modsPath)
 
 		// Count configs
 		configPath := filepath.Join(instancePath, "config")
@@ -479,33 +475,6 @@ func (m *Manager) GetActiveInstance() string {
 	return "default"
 }
 
-func (m *Manager) GetInstanceInfo(name string) (*InstanceInfo, error) {
-	instancePath, err := m.InstancePath(name)
-	if err != nil {
-		return nil, err
-	}
-
-	if _, err := os.Stat(instancePath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("instance '%s' does not exist", name)
-	}
-
-	info := &InstanceInfo{}
-
-	// Get mods
-	modsPath := filepath.Join(instancePath, "mods")
-	info.ModsDir = getJarFiles(modsPath)
-
-	// Get configs
-	configPath := filepath.Join(instancePath, "config")
-	info.ConfigsDir = getConfigFiles(configPath)
-
-	// Get saves
-	savesPath := filepath.Join(instancePath, "saves")
-	info.SavesDir = getDirectoryNames(savesPath)
-
-	return info, nil
-}
-
 func (m *Manager) DeleteInstance(name string) error {
 	if err := m.CanDelete(name); err != nil {
 		return err
@@ -522,16 +491,21 @@ func (m *Manager) DeleteInstance(name string) error {
 
 // Helper functions
 
-func countJarFiles(dir string) int {
-	count := 0
+func countMods(dir string) (enabled, disabled int) {
 	if entries, err := os.ReadDir(dir); err == nil {
 		for _, entry := range entries {
-			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".jar") {
-				count++
+			if entry.IsDir() {
+				continue
+			}
+			switch {
+			case strings.HasSuffix(entry.Name(), ".jar"):
+				enabled++
+			case strings.HasSuffix(entry.Name(), ".jar"+DisabledSuffix):
+				disabled++
 			}
 		}
 	}
-	return count
+	return enabled, disabled
 }
 
 func countFiles(dir string) int {
@@ -556,43 +530,4 @@ func countDirectories(dir string) int {
 		}
 	}
 	return count
-}
-
-func getJarFiles(dir string) []string {
-	var files []string
-	if entries, err := os.ReadDir(dir); err == nil {
-		for _, entry := range entries {
-			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".jar") {
-				files = append(files, entry.Name())
-			}
-		}
-	}
-	sort.Strings(files)
-	return files
-}
-
-func getConfigFiles(dir string) []string {
-	var files []string
-	if entries, err := os.ReadDir(dir); err == nil {
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				files = append(files, entry.Name())
-			}
-		}
-	}
-	sort.Strings(files)
-	return files
-}
-
-func getDirectoryNames(dir string) []string {
-	var dirs []string
-	if entries, err := os.ReadDir(dir); err == nil {
-		for _, entry := range entries {
-			if entry.IsDir() {
-				dirs = append(dirs, entry.Name())
-			}
-		}
-	}
-	sort.Strings(dirs)
-	return dirs
 }

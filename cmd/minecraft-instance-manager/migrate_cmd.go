@@ -54,7 +54,7 @@ instance launchable without running the loader's installer.`,
 				if err != nil {
 					return err
 				}
-				size, err := launch.Reclaimable(dir)
+				size, err := launch.Reclaimable(layout, dir)
 				if err != nil {
 					return err
 				}

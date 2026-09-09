@@ -127,7 +127,9 @@ func newTestController(t *testing.T, stub *signInStub) *Controller {
 	manager := &instance.Manager{AppDir: dir, InstancesPath: dir, MinecraftPath: dir, BackupPath: dir}
 	ctrl := NewController(manager, NewStore(), accounts, "test")
 	ctrl.MSAClientID = "test-client-id"
-	ctrl.MSAEndpoints = stub.endpoints()
+	if stub != nil {
+		ctrl.MSAEndpoints = stub.endpoints()
+	}
 
 	done := make(chan struct{})
 	t.Cleanup(func() { close(done) })

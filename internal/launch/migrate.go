@@ -202,28 +202,97 @@ func repairStoreRuntimes(runtimesDir string) error {
 	})
 }
 
-// Reclaimable reports how much of an instance is content the shared store
-// already holds, so a UI can show the saving before anything is moved.
-func Reclaimable(instanceDir string) (int64, error) {
-	var total int64
+// ReclaimStats summarises what a reclaim removed, or would remove.
+type ReclaimStats struct {
+	Files int64
+	Bytes int64
+}
+
+// Reclaim deletes from an instance the game files the shared store already
+// holds: the same path under libraries/, versions/, assets/ or runtime/ with
+// the same size. With dryRun it only counts. Directories left empty are
+// removed afterwards.
+//
+// It is the second half of a harvest. Six instances made by the official
+// launcher each carry their own gigabytes of the same assets and the same two
+// Java runtimes; once the store has them, those copies do nothing but occupy
+// the disk. Nothing the store does not have is touched, so a reclaim can
+// never lose data the launcher needs — and user data lives outside these
+// four directories entirely.
+func Reclaim(ctx context.Context, layout *Layout, instanceDir string, dryRun bool) (ReclaimStats, error) {
+	var stats ReclaimStats
+
 	for _, sub := range harvestDirs {
 		src := filepath.Join(instanceDir, sub)
-		err := filepath.WalkDir(src, func(_ string, d fs.DirEntry, err error) error {
+		if _, err := os.Stat(src); err != nil {
+			continue
+		}
+		dst, err := layout.harvestTarget(sub)
+		if err != nil {
+			return stats, err
+		}
+
+		var emptied []string
+		err = filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return nil
 			}
-			if d.Type().IsRegular() {
-				if info, err := d.Info(); err == nil {
-					total += info.Size()
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if d.IsDir() {
+				if path != src {
+					emptied = append(emptied, path)
+				}
+				return nil
+			}
+			if !d.Type().IsRegular() {
+				return nil
+			}
+			rel, err := filepath.Rel(src, path)
+			if err != nil {
+				return nil
+			}
+			info, err := d.Info()
+			if err != nil {
+				return nil
+			}
+			stored, err := os.Stat(filepath.Join(dst, rel))
+			if err != nil || stored.Size() != info.Size() {
+				return nil
+			}
+			// A hard link to the store's own file is the same bytes; it
+			// still counts as a copy to remove, since it pins the store's
+			// layout to the instance's.
+			if !dryRun {
+				if err := os.Remove(path); err != nil {
+					return nil
 				}
 			}
+			stats.Files++
+			stats.Bytes += info.Size()
 			return nil
 		})
-		if err != nil && !os.IsNotExist(err) {
-			return total, err
+		if err != nil {
+			return stats, err
+		}
+
+		if !dryRun {
+			// Deepest first, so a directory is tried after its children.
+			for i := len(emptied) - 1; i >= 0; i-- {
+				_ = os.Remove(emptied[i])
+			}
+			_ = os.Remove(src)
 		}
 	}
-	return total, nil
+	return stats, nil
+}
+
+// Reclaimable reports how much of an instance the shared store already
+// holds, so a UI can show the saving before anything is removed.
+func Reclaimable(layout *Layout, instanceDir string) (int64, error) {
+	stats, err := Reclaim(context.Background(), layout, instanceDir, true)
+	return stats.Bytes, err
 }
 
 // FormatBytes renders a byte count for display.
