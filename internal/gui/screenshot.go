@@ -29,7 +29,7 @@ import (
 // false, so Gio desaturates button backgrounds exactly as it would for a
 // disabled control. Buttons look washed out here and are full strength in a
 // real window; it is not a palette bug.
-func Screenshot(path string, width, height int, snap launcher.Snapshot) error {
+func Screenshot(path string, width, height int, snap launcher.Snapshot, setup func(*ui)) error {
 	win, err := headless.NewWindow(width, height)
 	if err != nil {
 		return fmt.Errorf("creating an offscreen surface: %w", err)
@@ -37,6 +37,9 @@ func Screenshot(path string, width, height int, snap launcher.Snapshot) error {
 	defer win.Release()
 
 	ui := newUI(nil)
+	if setup != nil {
+		setup(ui)
+	}
 
 	var ops op.Ops
 	gtx := layout.Context{

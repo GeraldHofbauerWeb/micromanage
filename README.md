@@ -8,6 +8,10 @@ A Minecraft launcher and instance manager. Keep several setups side by side,
 switch between them instantly, and launch them — sign-in, version, mod loader
 and all — from one window.
 
+<p align="center">
+  <img src="docs/launcher.png" alt="The launcher: instances on the left, the selected one as a workbench on the right" width="880">
+</p>
+
 > 🤖 **AI collaboration notice**: this project is developed together with an AI
 > assistant. The direction is human; the assistant helps with implementation,
 > documentation and structure. We think it is worth being open about that.
@@ -28,6 +32,14 @@ and all — from one window.
   already on disk — which it is, for anything you have played before.
 - **Switches with symlinks**, so the game keeps writing its saves, screenshots
   and configs into the instance directory exactly as before.
+- **Puts the instance on a workbench.** Mods, configs, worlds, resource and
+  shader packs, screenshots, logs and crash reports each get a tab with a
+  filter. Switch a mod off without deleting it, open a config in your editor,
+  show a file in the file manager, delete a world — or open the folder and
+  do it your way.
+- **Starts fast and stays out of the way.** Java runtimes are probed once and
+  remembered; the window shows your instances before anything else happens,
+  and a launch hands the game to Java in well under a second.
 
 Supported loaders: NeoForge, Forge, Fabric and Quilt.
 
@@ -56,21 +68,30 @@ static binary for every platform, the GUI is built per platform.
 
 ## Using it
 
-Run `minecraft-launcher`, or start it from the application menu.
+Run `minecraft-instance-manager-gui`, or start *Minecraft Instance Manager*
+from the application menu.
 
 1. **Sign in.** *Sign in with Microsoft* shows a code to enter at
    microsoft.com/link; the launcher waits, then stores the account and renews
    its session on its own. It needs an Azure application id (see below). A
    local account plays single-player in full but is rejected by servers running
    in online mode.
-2. **Pick an instance**, or create one. New instances are empty and instant;
-   cloning an existing one is an explicit choice.
-3. **Pick the system** — Vanilla or a mod loader. It defaults to the instance's
-   own, and an override applies to that launch only unless you make it the
-   default.
-4. **Edit** the instance: mods, configs, saves, the Minecraft version, the
-   loader, the heap size, the Java path and JVM arguments.
-5. **Play.**
+2. **Pick an instance** on the left, or press **+** to make one. New instances
+   are empty and instant; duplicating an existing one copies its mods, configs
+   and packs but not its worlds.
+3. **Work on it.** The tabs show what the instance holds. Every entry can be
+   opened with the program your desktop uses for it, shown in the file
+   manager, or deleted; a mod can be switched off, which renames it to
+   `.jar.disabled` — the convention other launchers use, so it stays off there
+   too. *Settings* holds the Minecraft version, the loader, memory, Java and
+   JVM flags, and is where an instance is renamed, duplicated or deleted.
+4. **Play.** The status bar says how long the launch took and, once the game
+   runs, what it last logged.
+
+The gear opens the launcher's own settings: paths, the Java runtimes found
+(one line per version, however many copies exist), and storage — where
+instances made by the official launcher can be consolidated into the shared
+store and their now-redundant copies freed.
 
 ### From the command line
 
@@ -90,7 +111,7 @@ also how it is tested.
 | `account login` | Sign in with a Microsoft account, by code |
 | `account list` / `account use <name>` / `account remove <name>` | See and choose the account that launches |
 | `account offline <name>` | Add a local account |
-| `java list` | Every Java runtime found, including those inside instances |
+| `java list [--rescan]` | Every Java runtime found, including those inside instances; results are cached until a runtime changes |
 | `verify [--version <id>]` | Download and check everything a version needs |
 | `migrate [--dry-run]` | Build the shared store from the instances |
 | `repair-perms` | Restore the executable bit on bundled Java runtimes |

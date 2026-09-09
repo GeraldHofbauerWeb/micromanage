@@ -1,6 +1,8 @@
 package gui
 
 import (
+	"fmt"
+	"image"
 	"os"
 	"strings"
 	"time"
@@ -9,6 +11,7 @@ import (
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/unit"
+	"gioui.org/widget"
 
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/instance"
 	"github.com/GeraldHofbauerWeb/minecraft-instance-switcher/internal/launcher"
@@ -53,9 +56,9 @@ func Run(opts Options) error {
 
 	w := new(app.Window)
 	w.Option(
-		app.Title("Minecraft Instance Manager"),
-		app.Size(unit.Dp(1100), unit.Dp(720)),
-		app.MinSize(unit.Dp(820), unit.Dp(560)),
+		app.Title("Instance Manager"),
+		app.Size(unit.Dp(1180), unit.Dp(760)),
+		app.MinSize(unit.Dp(880), unit.Dp(560)),
 	)
 
 	go pump(ctrl, w)
@@ -144,25 +147,36 @@ func RunMain(opts Options) {
 // between frames, so nothing here may be constructed inside Layout — an editor
 // rebuilt each frame would lose what the user typed.
 type ui struct {
-	ctrl  *launcher.Controller
-	th    *Theme
-	nav   navState
-	login loginScreen
-	list  instancesScreen
-	edit  editScreen
-	set   settingsScreen
+	ctrl    *launcher.Controller
+	th      *Theme
+	ic      iconSet
+	version string
+
+	// top bar
+	home, refresh, settings, account widget.Clickable
+
+	rail      railState
+	bench     workbench
+	login     loginScreen
+	setScreen settingsScreen
+	dialogs   dialogs
 }
 
 func newUI(ctrl *launcher.Controller) *ui {
-	th := NewTheme()
+	version := "dev"
+	if ctrl != nil {
+		version = ctrl.Version
+	}
 	return &ui{
-		ctrl:  ctrl,
-		th:    th,
-		nav:   newNavState(),
-		login: newLoginScreen(),
-		list:  newInstancesScreen(),
-		edit:  newEditScreen(),
-		set:   newSettingsScreen(),
+		ctrl:      ctrl,
+		version:   version,
+		th:        NewTheme(),
+		ic:        loadIcons(),
+		rail:      newRail(),
+		bench:     newWorkbench(),
+		login:     newLoginScreen(),
+		setScreen: newSettingsScreen(),
+		dialogs:   newDialogs(),
 	}
 }
 
@@ -172,39 +186,225 @@ func (u *ui) Layout(gtx layout.Context) layout.Dimensions {
 	return u.layoutSnapshot(gtx, u.ctrl.Store().Snapshot())
 }
 
-// layoutSnapshot draws a frame from a given snapshot. Splitting it out lets the
-// offscreen renderer draw a state without a live controller behind it.
+// layoutSnapshot draws a frame from a given snapshot. Splitting it out lets
+// the offscreen renderer draw a state without a live controller behind it.
 func (u *ui) layoutSnapshot(gtx layout.Context, snap launcher.Snapshot) layout.Dimensions {
-	return fill(gtx, u.th.P.Bg, 0, func(gtx layout.Context) layout.Dimensions {
-		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return u.layoutTopBar(gtx, snap)
+	th := u.th
+
+	// Bar clicks are read before layout so the frame already reflects them.
+	if u.home.Clicked(gtx) {
+		u.ctrl.Store().SetScreen(launcher.ScreenInstances)
+	}
+	if u.settings.Clicked(gtx) {
+		u.ctrl.Store().SetScreen(launcher.ScreenSettings)
+	}
+	if u.refresh.Clicked(gtx) {
+		u.ctrl.Dispatch(launcher.ActionRefresh{})
+	}
+	if u.account.Clicked(gtx) {
+		u.ctrl.Store().SetScreen(launcher.ScreenLogin)
+	}
+
+	return fillMax(gtx, th.P.Bg, func(gtx layout.Context) layout.Dimensions {
+		return layout.Stack{}.Layout(gtx,
+			layout.Expanded(func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+					rigid(func(gtx layout.Context) layout.Dimensions { return u.layoutTopBar(gtx, snap) }),
+					rigid(func(gtx layout.Context) layout.Dimensions { return hairline(gtx, th.P.LineDim) }),
+					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+						gtx.Constraints.Min = gtx.Constraints.Max
+						switch snap.Screen {
+						case launcher.ScreenLogin:
+							return u.login.Layout(gtx, u, snap)
+						case launcher.ScreenSettings:
+							return u.setScreen.Layout(gtx, u, snap)
+						default:
+							return u.layoutHome(gtx, snap)
+						}
+					}),
+					rigid(func(gtx layout.Context) layout.Dimensions { return hairline(gtx, th.P.LineDim) }),
+					rigid(func(gtx layout.Context) layout.Dimensions { return u.layoutStatusBar(gtx, snap) }),
+				)
 			}),
-			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-				return layout.UniformInset(SpaceM).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return u.layoutContent(gtx, snap)
-				})
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return u.layoutStatusBar(gtx, snap)
+			layout.Expanded(func(gtx layout.Context) layout.Dimensions {
+				return u.dialogs.Layout(gtx, u, snap)
 			}),
 		)
 	})
 }
 
-func (u *ui) layoutContent(gtx layout.Context, snap launcher.Snapshot) layout.Dimensions {
-	// A flex child gets no minimum on the cross axis, so a screen that centres
-	// itself would otherwise centre inside its own width and sit on the left.
-	gtx.Constraints.Min = gtx.Constraints.Max
+// layoutTopBar draws the title row: the mark and the wordmark on the left,
+// the ways out of the current screen on the right.
+func (u *ui) layoutTopBar(gtx layout.Context, snap launcher.Snapshot) layout.Dimensions {
+	th := u.th
+	gtx.Constraints.Min.X = gtx.Constraints.Max.X
 
-	switch snap.Screen {
-	case launcher.ScreenLogin:
-		return u.login.Layout(gtx, u.th, u.ctrl, snap)
-	case launcher.ScreenEdit:
-		return u.edit.Layout(gtx, u.th, u.ctrl, snap)
-	case launcher.ScreenSettings:
-		return u.set.Layout(gtx, u.th, u.ctrl, snap)
+	return fill(gtx, th.P.Surface, 0, func(gtx layout.Context) layout.Dimensions {
+		return layout.Inset{Top: sp2, Bottom: sp2, Left: sp3, Right: sp3}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			gtx.Constraints.Min.X = gtx.Constraints.Max.X
+			return row(gtx, sp2,
+				rigid(func(gtx layout.Context) layout.Dimensions {
+					if snap.Screen == launcher.ScreenInstances {
+						return row(gtx, unit.Dp(10),
+							rigid(func(gtx layout.Context) layout.Dimensions { return slab(gtx, th.P.Sky, unit.Dp(20)) }),
+							rigid(func(gtx layout.Context) layout.Dimensions { return th.brand(gtx, "Instance Manager", th.P.Text) }),
+						)
+					}
+					return th.ghost(gtx, &u.home, u.ic.Back, "Instances")
+				}),
+				flexFill(),
+				rigid(func(gtx layout.Context) layout.Dimensions { return u.iconButton(gtx, &u.refresh, u.ic.Refresh) }),
+				rigid(func(gtx layout.Context) layout.Dimensions {
+					if snap.Screen == launcher.ScreenSettings {
+						return layout.Dimensions{}
+					}
+					return u.iconButton(gtx, &u.settings, u.ic.Settings)
+				}),
+				rigid(func(gtx layout.Context) layout.Dimensions {
+					label, c := "Sign in", th.P.Torch
+					if snap.HasAccount {
+						label = snap.Active.Name
+						c = th.P.Good
+						if snap.Active.NeedsReauth {
+							c = th.P.Bad
+						}
+					}
+					return th.layoutButton(gtx, &u.account, buttonStyle{
+						hoverBg: th.P.Hover, fg: th.P.Text, size: sizeSmall,
+						inset: layout.Inset{Top: unit.Dp(6), Bottom: unit.Dp(6), Left: unit.Dp(10), Right: unit.Dp(12)},
+					}, func(gtx layout.Context) layout.Dimensions {
+						return row(gtx, sp2,
+							rigid(func(gtx layout.Context) layout.Dimensions { return dot(gtx, c, unit.Dp(8)) }),
+							rigid(func(gtx layout.Context) layout.Dimensions { return th.text(gtx, label, sizeSmall, 100, th.P.Text) }),
+						)
+					})
+				}),
+			)
+		})
+	})
+}
+
+func (u *ui) iconButton(gtx layout.Context, click *widget.Clickable, icon *widget.Icon) layout.Dimensions {
+	return u.th.iconButton(gtx, click, icon)
+}
+
+// layoutStatusBar draws the bottom strip: what is happening, or what last
+// happened, and a progress bar while a task runs.
+func (u *ui) layoutStatusBar(gtx layout.Context, snap launcher.Snapshot) layout.Dimensions {
+	th := u.th
+	gtx.Constraints.Min.X = gtx.Constraints.Max.X
+
+	return fill(gtx, th.P.Surface, 0, func(gtx layout.Context) layout.Dimensions {
+		return layout.Inset{Top: unit.Dp(7), Bottom: unit.Dp(7), Left: sp3, Right: sp3}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			gtx.Constraints.Min.X = gtx.Constraints.Max.X
+			return row(gtx, sp3,
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					switch {
+					case snap.Err != nil:
+						return row(gtx, unit.Dp(6),
+							rigid(func(gtx layout.Context) layout.Dimensions {
+								gtx.Constraints.Min = image.Pt(gtx.Dp(14), gtx.Dp(14))
+								gtx.Constraints.Max = gtx.Constraints.Min
+								return u.ic.Warning.Layout(gtx, th.P.Bad)
+							}),
+							layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+								return th.text(gtx, snap.Err.Error(), sizeSmall, 0, th.P.Bad)
+							}),
+						)
+					case snap.Game.Running:
+						return row(gtx, unit.Dp(6),
+							rigid(func(gtx layout.Context) layout.Dimensions { return dot(gtx, th.P.Torch, unit.Dp(7)) }),
+							rigid(func(gtx layout.Context) layout.Dimensions {
+								return th.text(gtx, fmt.Sprintf("%s is running", snap.Game.Instance), sizeSmall, 100, th.P.Text)
+							}),
+							rigid(func(gtx layout.Context) layout.Dimensions {
+								if len(snap.Game.Tail) == 0 {
+									return layout.Dimensions{}
+								}
+								return th.monoIn(gtx, "· "+lastLine(snap.Game.Tail), th.P.TextDim)
+							}),
+						)
+					case taskActive(snap.Task):
+						return th.text(gtx, snap.Task.Label+" · "+taskDetail(snap.Task), sizeSmall, 0, th.P.TextMid)
+					case snap.Status != "":
+						return th.text(gtx, snap.Status, sizeSmall, 0, th.P.TextMid)
+					default:
+						return th.text(gtx, fmt.Sprintf("%d instances", len(snap.Instances)), sizeSmall, 0, th.P.TextDim)
+					}
+				}),
+				rigid(func(gtx layout.Context) layout.Dimensions {
+					if !taskActive(snap.Task) {
+						return layout.Dimensions{}
+					}
+					gtx.Constraints.Max.X = gtx.Dp(unit.Dp(180))
+					return th.progress(gtx, taskFraction(snap.Task), unit.Dp(4))
+				}),
+				rigid(func(gtx layout.Context) layout.Dimensions {
+					return th.monoIn(gtx, u.version, th.P.TextDim)
+				}),
+			)
+		})
+	})
+}
+
+// taskActive reports whether a real task is in flight. The zero Task counts
+// as running by its own definition, which is not the same as there being one.
+func taskActive(t launcher.Task) bool {
+	return t.ID != 0 && t.Running()
+}
+
+// taskDetail renders the phase and progress of a task in one line.
+func taskDetail(t launcher.Task) string {
+	detail := t.Phase
+	if detail == "" {
+		detail = "working"
+	}
+	if t.Message != "" {
+		detail += " · " + t.Message
+	}
+	if t.Progress.FilesTotal > 0 {
+		detail += fmt.Sprintf(" · %d/%d", t.Progress.FilesDone, t.Progress.FilesTotal)
+	}
+	return detail
+}
+
+// taskFraction converts a task's progress into a bar fraction.
+func taskFraction(t launcher.Task) float32 {
+	switch {
+	case t.Progress.BytesTotal > 0:
+		return float32(t.Progress.BytesDone) / float32(t.Progress.BytesTotal)
+	case t.Progress.FilesTotal > 0:
+		return float32(t.Progress.FilesDone) / float32(t.Progress.FilesTotal)
+	}
+	return 0
+}
+
+func lastLine(lines []string) string {
+	if len(lines) == 0 {
+		return ""
+	}
+	line := lines[len(lines)-1]
+	if len(line) > 90 {
+		return line[:90] + "…"
+	}
+	return line
+}
+
+// humaniseSince renders a timestamp as a rough age.
+func humaniseSince(t time.Time) string {
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%d min ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%d h ago", int(d.Hours()))
+	case d < 48*time.Hour:
+		return "yesterday"
+	case d < 30*24*time.Hour:
+		return fmt.Sprintf("%d days ago", int(d.Hours()/24))
 	default:
-		return u.list.Layout(gtx, u.th, u.ctrl, snap)
+		return t.Format("2 Jan 2006")
 	}
 }

@@ -31,17 +31,73 @@ func demoSnapshot() launcher.Snapshot {
 	account := auth.Account{Kind: auth.KindOffline, Name: "Gerry", UUID: auth.OfflineUUID("Gerry")}
 
 	instances := []instance.Instance{
-		{Name: "sebsmodpack5", ModCount: 155, ConfigCount: 135, SaveCount: 1, IsActive: true,
+		{Name: "sebi-1.20.1", Path: "/home/gerry/.minecraft-instances/sebi-1.20.1", ModCount: 112, ConfigCount: 95, SaveCount: 13,
+			Configured: true, MinecraftVersion: "1.20.1",
+			Loader: instance.LoaderSpec{Type: instance.LoaderForge, Version: "47.4.0"}},
+		{Name: "sebsmodpack4", Path: "/home/gerry/.minecraft-instances/sebsmodpack4", ModCount: 136, ConfigCount: 136, SaveCount: 75,
+			Configured: true, MinecraftVersion: "1.21.1",
+			Loader: instance.LoaderSpec{Type: instance.LoaderNeoForge, Version: "21.1.227"}},
+		{Name: "sebsmodpack5", Path: "/home/gerry/.minecraft-instances/sebsmodpack5", ModCount: 153, DisabledMods: 2, ConfigCount: 135, SaveCount: 1, IsActive: true,
 			Configured: true, MinecraftVersion: "1.21.1",
 			Loader:     instance.LoaderSpec{Type: instance.LoaderNeoForge, Version: "21.1.248"},
 			LastPlayed: time.Now().Add(-3 * time.Hour)},
-		{Name: "sebsmodpack4", ModCount: 136, ConfigCount: 136, SaveCount: 75,
+		{Name: "vanilla", Path: "/home/gerry/.minecraft-instances/vanilla", Configured: true, MinecraftVersion: "1.21.8",
+			Loader: instance.LoaderSpec{Type: instance.LoaderVanilla}},
+		{Name: "fabric-test", Path: "/home/gerry/.minecraft-instances/fabric-test", ModCount: 11, ConfigCount: 103, SaveCount: 10,
 			Configured: true, MinecraftVersion: "1.21.1",
-			Loader: instance.LoaderSpec{Type: instance.LoaderNeoForge, Version: "21.1.227"}},
-		{Name: "sebi-1.20.1", ModCount: 112, ConfigCount: 95, SaveCount: 13,
-			Configured: true, MinecraftVersion: "1.20.1",
-			Loader: instance.LoaderSpec{Type: instance.LoaderForge, Version: "47.4.0"}},
-		{Name: "vanillaplus-test", ModCount: 11, ConfigCount: 103, SaveCount: 10},
+			Loader: instance.LoaderSpec{Type: instance.LoaderFabric, Version: "0.16.9"}},
+		{Name: "vanillaplus-test", Path: "/home/gerry/.minecraft-instances/vanillaplus-test", ModCount: 11, ConfigCount: 103, SaveCount: 10},
+	}
+
+	now := time.Now()
+	mod := func(name string, mb float64, days int, off bool) instance.Entry {
+		full := name
+		if off {
+			full += instance.DisabledSuffix
+		}
+		return instance.Entry{Name: full, Path: "/home/gerry/.minecraft-instances/sebsmodpack5/mods/" + full,
+			Size: int64(mb * 1024 * 1024), ModTime: now.Add(-time.Duration(days) * 24 * time.Hour), Disabled: off}
+	}
+	content := map[instance.ContentKind][]instance.Entry{
+		instance.ContentMods: {
+			mod("AmbientSounds_NEOFORGE_v6.1.4_mc1.21.1.jar", 1.9, 12, false),
+			mod("appleskin-neoforge-mc1.21.1-3.0.6.jar", 0.2, 30, false),
+			mod("architectury-13.0.8-neoforge.jar", 0.6, 30, false),
+			mod("balm-neoforge-1.21.1-21.0.47.jar", 0.4, 9, false),
+			mod("BetterF3-11.0.3-NeoForge-1.21.1.jar", 0.3, 40, true),
+			mod("create-1.21.1-6.0.6.jar", 24.8, 3, false),
+			mod("CreativeCore_NEOFORGE_v2.12.30_mc1.21.1.jar", 1.2, 12, false),
+			mod("curios-neoforge-9.5.1+1.21.1.jar", 0.5, 30, false),
+			mod("EnchantmentDescriptions-NeoForge-1.21.1-21.1.6.jar", 0.1, 60, false),
+			mod("jei-1.21.1-neoforge-19.22.1.318.jar", 1.4, 5, false),
+			mod("modernfix-neoforge-5.24.0+mc1.21.1.jar", 0.9, 5, false),
+			mod("sodium-neoforge-0.6.13+mc1.21.1.jar", 1.1, 5, true),
+			mod("supplementaries-1.21.1-3.1.28-beta.jar", 9.7, 20, false),
+			mod("xaerominimap-25.2.10_NeoForge_1.21.jar", 2.6, 2, false),
+		},
+		instance.ContentConfig: {
+			{Name: "create-client.toml", Size: 3100, ModTime: now.Add(-2 * time.Hour)},
+			{Name: "create-common.toml", Size: 900, ModTime: now.Add(-48 * time.Hour)},
+			{Name: "jei/jei-client.toml", Size: 4800, ModTime: now.Add(-3 * time.Hour)},
+			{Name: "jei/jei-mod-id-format.toml", Size: 400, ModTime: now.Add(-3 * time.Hour)},
+			{Name: "xaerominimap.txt", Size: 1200, ModTime: now.Add(-30 * time.Minute)},
+		},
+		instance.ContentSaves: {
+			{Name: "Sebis Welt", IsDir: true, ModTime: now.Add(-3 * time.Hour)},
+		},
+		instance.ContentResourcePacks: {
+			{Name: "FreshAnimations_v1.10.4.zip", Size: 1_800_000, ModTime: now.Add(-9 * 24 * time.Hour)},
+			{Name: "Fancy Crops v1.3.zip", Size: 130_000, ModTime: now.Add(-9 * 24 * time.Hour)},
+		},
+		instance.ContentShaderPacks: {
+			{Name: "ComplementaryUnbound_r5.5.1.zip", Size: 2_100_000, ModTime: now.Add(-20 * 24 * time.Hour)},
+		},
+		instance.ContentScreenshots: {},
+		instance.ContentLogs: {
+			{Name: "latest.log", Size: 812_000, ModTime: now.Add(-3 * time.Hour)},
+			{Name: "2026-09-08-1.log.gz", Size: 61_000, ModTime: now.Add(-26 * time.Hour)},
+		},
+		instance.ContentCrashReports: {},
 	}
 
 	return launcher.Snapshot{
@@ -51,6 +107,8 @@ func demoSnapshot() launcher.Snapshot {
 		HasAccount: true,
 		Instances:  instances,
 		Selected:   "sebsmodpack5",
+		Content:    content,
+		ContentFor: "sebsmodpack5",
 		Editing: instance.Meta{
 			Name:             "sebsmodpack5",
 			MinecraftVersion: "1.21.1",
@@ -93,6 +151,13 @@ func TestRenderScreens(t *testing.T) {
 		Tail: []string{"[Render thread/INFO]: Setting user: Gerry"},
 	}
 
+	empty := demoSnapshot()
+	empty.Instances = nil
+	empty.Selected = ""
+
+	unselected := demoSnapshot()
+	unselected.Selected = ""
+
 	login := demoSnapshot()
 	login.Screen = launcher.ScreenLogin
 	login.MSAConfigured = true
@@ -122,22 +187,45 @@ func TestRenderScreens(t *testing.T) {
 		"sebi-1.20.1": 3 * gb, "vanillaplus-test": 2*gb + gb/2,
 	}
 
+	// Interface states that live in widgets rather than in the snapshot.
+	configTab := func(u *ui) { u.bench.tab = 1 }
+	worldsTab := func(u *ui) { u.bench.tab = 2 }
+	instanceSettings := func(u *ui) { u.bench.tab = len(benchTabs()) - 1 }
+	confirmDelete := func(u *ui) {
+		u.bench.content[instance.ContentMods].confirming = "create-1.21.1-6.0.6.jar"
+	}
+	createDialog := func(u *ui) { u.dialogs.openCreate(demoSnapshot(), "") }
+	duplicateDialog := func(u *ui) { u.dialogs.openCreate(demoSnapshot(), "sebsmodpack5") }
+	deleteDialog := func(u *ui) { u.dialogs.openDelete(demoSnapshot().Instances[1]) }
+	filtered := func(u *ui) { u.bench.content[instance.ContentMods].filter.SetText("neoforge 1.21") }
+
 	cases := []struct {
-		name string
-		snap launcher.Snapshot
+		name  string
+		snap  launcher.Snapshot
+		setup func(*ui)
 	}{
-		{"instances", demoSnapshot()},
-		{"launching", launching},
-		{"running", running},
-		{"login", login},
-		{"login-first-run", firstRun},
-		{"login-device-code", deviceCode},
-		{"settings", settings},
+		{"instances", demoSnapshot(), nil},
+		{"instances-filtered", demoSnapshot(), filtered},
+		{"instances-confirm-delete", demoSnapshot(), confirmDelete},
+		{"configs", demoSnapshot(), configTab},
+		{"worlds", demoSnapshot(), worldsTab},
+		{"instance-settings", demoSnapshot(), instanceSettings},
+		{"dialog-create", demoSnapshot(), createDialog},
+		{"dialog-duplicate", demoSnapshot(), duplicateDialog},
+		{"dialog-delete", demoSnapshot(), deleteDialog},
+		{"launching", launching, nil},
+		{"running", running, nil},
+		{"empty", empty, nil},
+		{"unselected", unselected, nil},
+		{"login", login, nil},
+		{"login-first-run", firstRun, nil},
+		{"login-device-code", deviceCode, nil},
+		{"settings", settings, nil},
 	}
 
 	for _, tc := range cases {
 		path := filepath.Join(dir, tc.name+".png")
-		if err := Screenshot(path, 1100, 720, tc.snap); err != nil {
+		if err := Screenshot(path, 1180, 760, tc.snap, tc.setup); err != nil {
 			t.Fatalf("rendering %s: %v", tc.name, err)
 		}
 		info, err := os.Stat(path)
