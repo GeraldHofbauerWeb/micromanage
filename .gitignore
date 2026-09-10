@@ -31,3 +31,6 @@ dist/
 
 # Go modules
 vendor/
+
+# Icon drafts; the finished ones live in packaging/mark.
+packaging/drafts/
