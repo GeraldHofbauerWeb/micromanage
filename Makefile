@@ -1,4 +1,4 @@
-# MicroManage
+# Instant Launcher
 #
 # The CLI and the GUI are separate binaries on purpose: Gio needs cgo on Linux
 # and macOS, and keeping it out of the CLI is what lets the CLI cross-compile
@@ -7,21 +7,23 @@
 VERSION      ?= v2.0.0-dev
 MSA_CLIENT_ID ?=
 
-CLI_BIN  := micromanage
-GUI_BIN  := micromanage-launcher
-# LEGACY_BINS are the names this was installed under before. minecraft-launcher
+CLI_BIN  := instant-mc
+GUI_BIN  := instant-launcher
+# LEGACY_BINS and LEGACY_DESKTOPS are the names this was installed under before.
+# minecraft-launcher
 # is Mojang's own name in /usr/bin, which our copy shadowed for anyone typing it
 # in a shell; the other two are what the binaries were called before the project
-# became MicroManage. Nothing installs them any more, and both install and
+# became Instant Launcher. Nothing installs them any more, and both install and
 # uninstall clear them out, so a rebuild leaves one set of binaries behind.
-LEGACY_BINS   := minecraft-launcher minecraft-instance-manager minecraft-instance-manager-gui
-LEGACY_DESKTOP := minecraft-instance-manager
+LEGACY_BINS    := minecraft-launcher minecraft-instance-manager minecraft-instance-manager-gui \
+                  micromanage micromanage-launcher
+LEGACY_DESKTOPS := minecraft-instance-manager micromanage
 
 PREFIX      ?= $(HOME)/.local
 BINDIR      := $(PREFIX)/bin
 APPDIR      := $(PREFIX)/share/applications
 ICONDIR     := $(PREFIX)/share/icons/hicolor
-DESKTOP_ID  := micromanage
+DESKTOP_ID  := instant-launcher
 
 LDFLAGS := -s -w -X main.Version=$(VERSION) -X main.defaultMSAClientID=$(MSA_CLIENT_ID)
 
@@ -45,11 +47,11 @@ build: cli gui
 
 cli:
 	@echo "  building $(CLI_BIN) (CGO_ENABLED=0)"
-	@CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o dist/$(CLI_BIN) ./cmd/micromanage
+	@CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o dist/$(CLI_BIN) ./cmd/instant-mc
 
 gui:
 	@echo "  building $(GUI_BIN) [$(GUI_BACKEND)]"
-	@go build $(GUI_TAGS) -ldflags="$(LDFLAGS)" -o dist/$(GUI_BIN) ./cmd/micromanage-launcher
+	@go build $(GUI_TAGS) -ldflags="$(LDFLAGS)" -o dist/$(GUI_BIN) ./cmd/instant-launcher
 
 # install puts both binaries on PATH and registers the GUI as a desktop
 # application, so the launcher is reachable from the application grid rather
@@ -67,13 +69,15 @@ install-desktop:
 	@desktop-file-validate $(APPDIR)/$(DESKTOP_ID).desktop 2>/dev/null || true
 	@update-desktop-database $(APPDIR) 2>/dev/null || true
 	@gtk-update-icon-cache -f -t $(ICONDIR) 2>/dev/null || true
-	@rm -f $(APPDIR)/$(LEGACY_DESKTOP).desktop $(ICONDIR)/scalable/apps/$(LEGACY_DESKTOP).svg
+	@rm -f $(addsuffix .desktop,$(addprefix $(APPDIR)/,$(LEGACY_DESKTOPS))) \
+	      $(addsuffix .svg,$(addprefix $(ICONDIR)/scalable/apps/,$(LEGACY_DESKTOPS)))
 	@echo "  registered $(DESKTOP_ID).desktop"
 
 uninstall:
 	@rm -f $(BINDIR)/$(CLI_BIN) $(BINDIR)/$(GUI_BIN) $(addprefix $(BINDIR)/,$(LEGACY_BINS))
-	@rm -f $(APPDIR)/$(DESKTOP_ID).desktop $(APPDIR)/$(LEGACY_DESKTOP).desktop
-	@rm -f $(ICONDIR)/scalable/apps/$(DESKTOP_ID).svg $(ICONDIR)/scalable/apps/$(LEGACY_DESKTOP).svg
+	@rm -f $(APPDIR)/$(DESKTOP_ID).desktop $(addsuffix .desktop,$(addprefix $(APPDIR)/,$(LEGACY_DESKTOPS)))
+	@rm -f $(ICONDIR)/scalable/apps/$(DESKTOP_ID).svg \
+	      $(addsuffix .svg,$(addprefix $(ICONDIR)/scalable/apps/,$(LEGACY_DESKTOPS)))
 	@update-desktop-database $(APPDIR) 2>/dev/null || true
 	@gtk-update-icon-cache -f -t $(ICONDIR) 2>/dev/null || true
 	@echo "  removed"

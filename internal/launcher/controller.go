@@ -11,15 +11,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/auth"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/desktop"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/download"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/java"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/launch"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/loader"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/mods"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/mojang"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/auth"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/desktop"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/download"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/instance"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/java"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/launch"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/loader"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/mods"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/mojang"
 )
 
 // Action is a request from the UI. Every action is handled off the render
@@ -1332,7 +1332,7 @@ func (c *Controller) doLaunch(ctx context.Context, id TaskID, name string) {
 			ClientID:    c.LauncherID,
 		},
 		GameDir:       c.Manager.MinecraftPath,
-		LauncherName:  "micromanage",
+		LauncherName:  "instant-launcher",
 		LauncherVer:   c.Version,
 		MinMB:         minMB,
 		MaxMB:         maxMB,

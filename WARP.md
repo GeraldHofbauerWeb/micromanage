@@ -4,7 +4,7 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 ## Project Overview
 
-MicroManage is a Go application that manages multiple Minecraft installations and launches them. It provides a graphical launcher (Gio) and a command-line interface; the Bubble Tea TUI was removed in v2.
+Instant Launcher is a Go application that manages multiple Minecraft installations and launches them. It provides a graphical launcher (Gio) and a command-line interface; the Bubble Tea TUI was removed in v2.
 
 It resolves versions, downloads libraries, assets and natives into a store shared across instances, picks a matching Java runtime and builds the launch command line itself. Switching between instances still uses symlinks.
 
@@ -27,8 +27,8 @@ The system works by:
 ```
 
 ### Key components
-- `cmd/micromanage/` — the CLI, built with CGO_ENABLED=0 for every target
-- `cmd/micromanage-launcher/` — the GUI; separate because Gio needs cgo
+- `cmd/instant-mc/` — the CLI, built with CGO_ENABLED=0 for every target
+- `cmd/instant-launcher/` — the GUI; separate because Gio needs cgo
 - `internal/instance/` — instances, their metadata and detection
 - `internal/mojang/` — version manifests, inheritance, per-platform rules
 - `internal/download/` — parallel, SHA-1 verified downloads
@@ -49,22 +49,22 @@ make build
 make test
 
 # Test the application locally
-./micromanage list
+./instant-mc list
 
 # Test all core functions
-./micromanage create test-instance
-./micromanage switch test-instance
-./micromanage list
-./micromanage restore
+./instant-mc create test-instance
+./instant-mc switch test-instance
+./instant-mc list
+./instant-mc restore
 
 # Clean up test instance
-./micromanage delete test-instance
+./instant-mc delete test-instance
 ```
 
 ### Build and Release
 ```bash
 # The CLI cross-compiles everywhere without cgo
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/micromanage
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/instant-mc
 
 # The GUI needs cgo on Linux and macOS, so it builds on a native runner.
 # Windows is the exception: Gio is pure Go there.

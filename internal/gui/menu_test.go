@@ -12,8 +12,8 @@ import (
 	"gioui.org/op"
 	"gioui.org/unit"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/launcher"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/instance"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/launcher"
 )
 
 // frame lays the interface out once against a router, so queued pointer

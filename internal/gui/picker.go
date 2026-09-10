@@ -9,8 +9,8 @@ import (
 	"gioui.org/unit"
 	"gioui.org/widget"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/launcher"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/instance"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/launcher"
 )
 
 // pickerSource says where a picker's options come from. Options are read

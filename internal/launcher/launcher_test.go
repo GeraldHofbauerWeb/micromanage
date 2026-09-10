@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/auth"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/auth"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/instance"
 )
 
 // TestVersionIDForKeepsStoredIDForOwnLoader checks that the id detected from

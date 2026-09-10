@@ -5,8 +5,8 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/java"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/launch"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/java"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/launch"
 	"github.com/spf13/cobra"
 )
 

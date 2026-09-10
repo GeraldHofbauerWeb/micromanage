@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/auth"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/auth"
 )
 
 // accountsFileName holds the signed-in accounts.

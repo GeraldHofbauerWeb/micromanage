@@ -7,9 +7,9 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/desktop"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/launch"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/desktop"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/instance"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/launch"
 	"github.com/spf13/cobra"
 )
 

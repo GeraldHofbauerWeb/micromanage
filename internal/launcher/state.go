@@ -10,11 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/auth"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/download"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/java"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/loader"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/auth"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/download"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/instance"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/java"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/loader"
 )
 
 // Screen identifies the visible page.

@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/download"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/download"
 )
 
 func writeJar(t *testing.T, dir, name string, files map[string]string) string {

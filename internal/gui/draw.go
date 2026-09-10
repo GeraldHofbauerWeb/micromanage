@@ -191,7 +191,7 @@ func none(layout.Context) layout.Dimensions { return layout.Dimensions{} }
 
 // mark draws the launcher's icon at a given size: the rounded dark tile
 // with three stacked instances, the top one in the accent. It is the same
-// geometry as packaging/micromanage.svg, scaled, so the
+// geometry as packaging/instant-launcher.svg, scaled, so the
 // window and the application menu agree on what this program looks like.
 func mark(gtx layout.Context, size unit.Dp) layout.Dimensions {
 	s := float32(gtx.Dp(size))

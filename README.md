@@ -1,12 +1,13 @@
 <p align="center">
-  <img src="packaging/micromanage-plain.svg" alt="" width="132" height="132">
+  <img src="packaging/instant-launcher-plain.svg" alt="" width="132" height="132">
 </p>
 
-# MicroManage
+# Instant Launcher
 
-A Minecraft launcher and instance manager. Keep several setups side by side,
-switch between them instantly, and launch them — sign-in, version, mod loader
-and all — from one window.
+A blazingly fast Minecraft launcher and instance manager. Keep several setups
+side by side, switch between them instantly, and launch them — sign-in,
+version, mod loader and all — from one window. The window is up in under a
+second, and the game is running one or two seconds after you press Play.
 
 <p align="center">
   <img src="docs/launcher.png" alt="The launcher: instances on the left, the selected one as a workbench on the right" width="880">
@@ -55,8 +56,8 @@ Supported loaders: NeoForge, Forge, Fabric and Quilt.
 ### From source
 
 ```bash
-git clone https://github.com/GeraldHofbauerWeb/micromanage.git
-cd micromanage
+git clone https://github.com/GeraldHofbauerWeb/instant-launcher.git
+cd instant-launcher
 make install
 ```
 
@@ -69,13 +70,13 @@ Debian) the build falls back to the OpenGL backend automatically.
 
 ### Pre-built binaries
 
-Download from the [releases page](https://github.com/GeraldHofbauerWeb/micromanage/releases).
+Download from the [releases page](https://github.com/GeraldHofbauerWeb/instant-launcher/releases).
 The CLI (`-cli-`) and the GUI (`-gui-`) are separate archives; the CLI is a
 static binary for every platform, the GUI is built per platform.
 
 ## Using it
 
-Run `micromanage-launcher`, or start *MicroManage*
+Run `instant-launcher`, or start *Instant Launcher*
 from the application menu.
 
 1. **Sign in.** *Sign in with Microsoft* shows a code to enter at
@@ -121,8 +122,10 @@ store and their now-redundant copies freed.
 
 ### From the command line
 
-Everything the GUI does is available in `micromanage`, which is
-also how it is tested.
+Everything the GUI does is available in `instant-mc`, which is also how it is
+tested. The graphical launcher is `instant-launcher`; the command line answers
+to `instant-mc`, because `instant` on its own says nothing about what it
+starts.
 
 | Command | What it does |
 |---|---|
@@ -163,7 +166,7 @@ that symlink.
 ### The shared store
 
 Everything downloadable lives once, under
-`~/.config/micromanage/shared`:
+`~/.config/instant-launcher/shared`:
 
 ```
 shared/
@@ -216,7 +219,7 @@ It requires your own Azure application:
    Launchers registered before the review process started keep their access.
 
 Supply the id at build time (`make MSA_CLIENT_ID=<uuid>`), through
-`MICROMANAGE_MSA_CLIENT_ID`, or with `config msa-client-id <uuid>` — in that order of
+`INSTANT_LAUNCHER_MSA_CLIENT_ID`, or with `config msa-client-id <uuid>` — in that order of
 precedence, environment first. Without one, only local accounts are offered.
 
 The Minecraft session lasts about a day. It is renewed from the stored refresh
@@ -230,7 +233,7 @@ The older `MIM_MSA_CLIENT_ID` is still read, so a shell profile written before
 the rename keeps working.
 
 **On credentials:** accounts are stored in
-`~/.config/micromanage/accounts.json` with mode 0600. The file is not
+`~/.config/instant-launcher/accounts.json` with mode 0600. The file is not
 encrypted — Go has no cross-platform keyring without cgo, and claiming
 otherwise would be worse than saying so.
 

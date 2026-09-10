@@ -1,4 +1,4 @@
-// Command micromanage-launcher is the graphical launcher.
+// Command instant-launcher is the graphical launcher.
 //
 // It is a separate binary from the CLI because Gio needs cgo on Linux and
 // macOS; keeping it apart is what lets the CLI go on cross-compiling for every
@@ -8,7 +8,7 @@ package main
 import (
 	"flag"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/gui"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/gui"
 )
 
 // Version is stamped at build time with

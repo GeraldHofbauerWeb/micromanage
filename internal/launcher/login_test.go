@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/auth"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/auth"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/instance"
 )
 
 // signInStub stands in for Microsoft, Xbox Live and Minecraft services, so the

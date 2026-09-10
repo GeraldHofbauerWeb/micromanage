@@ -23,9 +23,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/download"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/launch"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/download"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/instance"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/launch"
 )
 
 // Endpoints are the services the loaders publish through. They are a struct

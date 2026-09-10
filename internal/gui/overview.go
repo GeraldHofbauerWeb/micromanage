@@ -11,9 +11,9 @@ import (
 	"gioui.org/widget"
 	"gioui.org/widget/material"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/launch"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/launcher"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/instance"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/launch"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/launcher"
 )
 
 // overview is the workbench's first tab: one card per kind of content,

@@ -1,4 +1,4 @@
-module github.com/GeraldHofbauerWeb/micromanage
+module github.com/GeraldHofbauerWeb/instant-launcher
 
 go 1.25.1
 

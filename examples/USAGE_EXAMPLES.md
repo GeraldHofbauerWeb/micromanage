@@ -1,6 +1,6 @@
 # Usage Examples
 
-This document provides practical examples for common use cases of MicroManage.
+This document provides practical examples for common use cases of Instant Launcher.
 
 ## 🎮 Gaming Scenarios
 
@@ -8,9 +8,9 @@ This document provides practical examples for common use cases of MicroManage.
 
 ```bash
 # Set up different modpacks
-micromanage create skyfactory
-micromanage create stoneblock
-micromanage create enigmatica
+instant-mc create skyfactory
+instant-mc create stoneblock
+instant-mc create enigmatica
 
 # Add mods to each
 cp SkyFactory-mods/* ~/.minecraft-instances/skyfactory/mods/
@@ -18,9 +18,9 @@ cp StoneBlock-mods/* ~/.minecraft-instances/stoneblock/mods/
 cp Enigmatica-mods/* ~/.minecraft-instances/enigmatica/mods/
 
 # Switch between them
-micromanage switch skyfactory
+instant-mc switch skyfactory
 # Play Sky Factory...
-micromanage switch stoneblock
+instant-mc switch stoneblock
 # Play Stone Block...
 ```
 
@@ -28,12 +28,12 @@ micromanage switch stoneblock
 
 ```bash
 # Different Minecraft versions
-micromanage create mc-1.19.4-forge
-micromanage create mc-1.20.1-forge
-micromanage create mc-1.21-neoforge
+instant-mc create mc-1.19.4-forge
+instant-mc create mc-1.20.1-forge
+instant-mc create mc-1.21-neoforge
 
 # Switch based on what you want to play
-micromanage switch mc-1.20.1-forge
+instant-mc switch mc-1.20.1-forge
 ```
 
 ## 🔧 Development Scenarios
@@ -42,18 +42,18 @@ micromanage switch mc-1.20.1-forge
 
 ```bash
 # Create development instances
-micromanage create clean-testing      # No other mods
-micromanage create compatibility-test # With common mods
-micromanage create performance-test   # With performance mods
+instant-mc create clean-testing      # No other mods
+instant-mc create compatibility-test # With common mods
+instant-mc create performance-test   # With performance mods
 
 # Development cycle
-micromanage switch clean-testing
+instant-mc switch clean-testing
 # Test your mod in isolation
 
-micromanage switch compatibility-test  
+instant-mc switch compatibility-test  
 # Test with other popular mods
 
-micromanage switch performance-test
+instant-mc switch performance-test
 # Check performance impact
 ```
 
@@ -61,9 +61,9 @@ micromanage switch performance-test
 
 ```bash
 # Test your mod across Minecraft versions
-micromanage create dev-1.20.1
-micromanage create dev-1.20.4
-micromanage create dev-1.21
+instant-mc create dev-1.20.1
+instant-mc create dev-1.20.4
+instant-mc create dev-1.21
 
 # Add your mod to each and test
 cp my-mod-1.20.1.jar ~/.minecraft-instances/dev-1.20.1/mods/
@@ -77,8 +77,8 @@ cp my-mod-1.21.jar ~/.minecraft-instances/dev-1.21/mods/
 
 ```bash
 # Create base modpack
-micromanage create my-modpack-base
-micromanage switch my-modpack-base
+instant-mc create my-modpack-base
+instant-mc switch my-modpack-base
 
 # Add mods incrementally and test
 cp essential-mods/* ~/.minecraft/mods/
@@ -88,8 +88,8 @@ cp optional-mods/* ~/.minecraft/mods/
 # Test compatibility...
 
 # Create variants
-micromanage create my-modpack-lite
-micromanage create my-modpack-full
+instant-mc create my-modpack-lite
+instant-mc create my-modpack-full
 
 # Distribute the lite version
 tar -czf my-modpack-lite.tar.gz ~/.minecraft-instances/my-modpack-lite/
@@ -99,14 +99,14 @@ tar -czf my-modpack-lite.tar.gz ~/.minecraft-instances/my-modpack-lite/
 
 ```bash
 # Compare configurations
-micromanage create config-a
-micromanage create config-b
+instant-mc create config-a
+instant-mc create config-b
 
 # Test different mod configurations
-micromanage switch config-a
+instant-mc switch config-a
 # Configure mods one way...
 
-micromanage switch config-b  
+instant-mc switch config-b  
 # Configure mods differently...
 
 # Compare performance/stability
@@ -118,25 +118,25 @@ micromanage switch config-b
 
 ```bash
 # Before major changes, create backup
-micromanage create modpack-backup-$(date +%Y%m%d)
+instant-mc create modpack-backup-$(date +%Y%m%d)
 
 # Copy current instance  
 cp -r ~/.minecraft-instances/my-modpack ~/.minecraft-instances/modpack-backup-$(date +%Y%m%d)/
 
 # Make changes safely
-micromanage switch my-modpack
+instant-mc switch my-modpack
 # Add experimental mods...
 
 # If issues occur, restore backup
-micromanage switch modpack-backup-$(date +%Y%m%d)
+instant-mc switch modpack-backup-$(date +%Y%m%d)
 ```
 
 ### Sharing with Friends
 
 ```bash
 # Prepare instance for sharing
-micromanage create friend-modpack
-micromanage switch friend-modpack
+instant-mc create friend-modpack
+instant-mc switch friend-modpack
 
 # Add mods and configure
 # Clean up personal data (remove saves, etc.)
@@ -154,15 +154,15 @@ tar -czf friend-modpack.tar.gz friend-modpack/
 
 ```bash
 # Sync with server modpack
-micromanage create server-sync
-micromanage switch server-sync
+instant-mc create server-sync
+instant-mc switch server-sync
 
 # Download server mods
 wget server.com/modpack-mods.zip
 unzip modpack-mods.zip -d ~/.minecraft/mods/
 
 # Keep in sync
-micromanage switch server-sync
+instant-mc switch server-sync
 # Update mods as server updates...
 ```
 
@@ -172,16 +172,16 @@ micromanage switch server-sync
 
 ```bash
 # List all instances to see what you have
-micromanage list
+instant-mc list
 
 # Switch to temporary instance before cleanup
-micromanage switch vanilla
+instant-mc switch vanilla
 
 # Remove unused instances
 rm -rf ~/.minecraft-instances/old-instance-name
 
 # Restore if needed
-micromanage restore
+instant-mc restore
 ```
 
 ### Regular Backups
@@ -205,10 +205,10 @@ ls -t ~/minecraft-backups/ | tail -n +5 | xargs -d '\n' -r rm -rf --
 ### Quick Instance Info
 ```bash
 # See mod counts
-micromanage list
+instant-mc list
 
 # Check current instance
-micromanage list | grep "Current instance"
+instant-mc list | grep "Current instance"
 ```
 
 ### Scripted Workflows
@@ -223,7 +223,7 @@ echo "Updating test instance..."
 cp build/libs/*.jar ~/.minecraft-instances/dev-test/mods/
 
 echo "Switching to test instance..."
-micromanage switch dev-test
+instant-mc switch dev-test
 
 echo "Ready for testing!"
 ```
@@ -232,11 +232,11 @@ echo "Ready for testing!"
 ```bash
 # Always work on copies when experimenting
 cp -r ~/.minecraft-instances/stable ~/.minecraft-instances/experimental
-micromanage switch experimental
+instant-mc switch experimental
 # Experiment safely...
 
 # Restore stable if needed
-micromanage switch stable
+instant-mc switch stable
 ```
 
 ---

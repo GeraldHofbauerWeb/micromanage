@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/download"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/download"
 )
 
 // VersionManifestURL lists every published Minecraft version.

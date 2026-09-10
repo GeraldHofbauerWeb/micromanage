@@ -14,8 +14,8 @@ import (
 	"gioui.org/widget"
 	"gioui.org/widget/material"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/auth"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/launcher"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/auth"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/launcher"
 )
 
 // loginScreen signs a player in, and lists who already is.
@@ -166,7 +166,7 @@ func (s *loginScreen) layoutMicrosoft(gtx layout.Context, u *ui, snap launcher.S
 	th := u.th
 	if !snap.MSAConfigured {
 		return th.notice(gtx, u.ic.Info, "Microsoft sign-in needs an Azure application id, which this build "+
-			"does not have. Set one under Settings → Microsoft application id (or in MICROMANAGE_MSA_CLIENT_ID) "+
+			"does not have. Set one under Settings → Microsoft application id (or in INSTANT_LAUNCHER_MSA_CLIENT_ID) "+
 			"to play on online servers.", th.P.TextMid)
 	}
 	return column(gtx, sp2,

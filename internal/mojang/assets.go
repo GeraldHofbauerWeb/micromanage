@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/download"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/download"
 )
 
 // ResourcesURL is the CDN serving asset objects by digest.

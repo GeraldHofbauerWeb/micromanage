@@ -16,7 +16,7 @@ const (
 	InstancesDir  = ".minecraft-instances"
 	MinecraftDir  = ".minecraft"
 	BackupSuffix  = ".backup"
-	AppFolderName = "micromanage" // folder inside OS config/app support dir
+	AppFolderName = "instant-launcher" // folder inside OS config/app support dir
 )
 
 type Config struct {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/mojang"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/mojang"
 )
 
 var testPlatform = mojang.Platform{OS: "linux", Arch: "x86_64", Version: "6.9.3"}
@@ -26,7 +26,7 @@ func testOptions() Options {
 	return Options{
 		Session:      testSession(),
 		GameDir:      "/home/gerry/.minecraft",
-		LauncherName: "micromanage",
+		LauncherName: "instant-mc",
 		LauncherVer:  "2.0.0",
 		MinMB:        1024,
 		MaxMB:        8192,

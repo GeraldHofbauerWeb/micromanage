@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/download"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/mojang"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/download"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/mojang"
 )
 
 // Phase names the stage a preparation is in, so a UI can show progress per

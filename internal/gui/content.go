@@ -8,9 +8,9 @@ import (
 	"gioui.org/unit"
 	"gioui.org/widget"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/launch"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/launcher"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/instance"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/launch"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/launcher"
 )
 
 // kindState is the widgets of one content tab: its filter, its list, and

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/instance"
 )
 
 // TestSelectListsContentAndTogglingRefreshesIt walks the path the workbench

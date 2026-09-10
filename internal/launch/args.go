@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/mojang"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/mojang"
 )
 
 // Session identifies the player a launch runs as.

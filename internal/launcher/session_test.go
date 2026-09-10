@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/auth"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/auth"
 )
 
 // msaAccount is a signed-in Microsoft account whose session runs out at a

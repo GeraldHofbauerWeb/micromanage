@@ -1,13 +1,13 @@
 [Desktop Entry]
 Type=Application
-Name=MicroManage
+Name=Instant Launcher
 GenericName=Minecraft Launcher
 Comment=Manage Minecraft instances and launch them
-Exec=@BINDIR@/micromanage-launcher
-Icon=micromanage
+Exec=@BINDIR@/instant-launcher
+Icon=instant-launcher
 Terminal=false
 Categories=Game;
 Keywords=minecraft;modpack;forge;neoforge;fabric;launcher;
 StartupNotify=true
-StartupWMClass=micromanage
+StartupWMClass=instant-launcher
 X-GNOME-UsesNotifications=false

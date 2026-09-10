@@ -17,8 +17,8 @@ import (
 	"gioui.org/unit"
 	"gioui.org/widget"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/launcher"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/instance"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/launcher"
 )
 
 // invalidateInterval bounds how often the window repaints in response to
@@ -31,14 +31,14 @@ const invalidateInterval = 30 * time.Millisecond
 
 // appID is the desktop identity of the window: it has to match the name of
 // the installed .desktop file (see packaging/), or nothing links the two.
-const appID = "micromanage"
+const appID = "instant-launcher"
 
 // Options configures the launcher window.
 type Options struct {
 	Version    string
 	LauncherID string
 	// MSAClientID is the Azure application id Microsoft sign-in runs against.
-	// It is resolved at startup from, in order, the MICROMANAGE_MSA_CLIENT_ID
+	// It is resolved at startup from, in order, the INSTANT_LAUNCHER_MSA_CLIENT_ID
 	// environment variable, the manager configuration, and the id compiled
 	// into the build — so a fork or a test build needs no recompile.
 	MSAClientID string
@@ -65,12 +65,12 @@ func Run(opts Options) error {
 	// The desktop matches a window to its .desktop file by this id — the
 	// Wayland app_id, the X11 class — so it has to be the file's name. Left
 	// to itself Gio uses the binary's name, and the dock then shows
-	// "micromanage-launcher" under a blank icon.
+	// "instant-launcher" under a blank icon.
 	app.ID = appID
 
 	w := new(app.Window)
 	w.Option(
-		app.Title("MicroManage"),
+		app.Title("Instant Launcher"),
 		app.Size(unit.Dp(1180), unit.Dp(760)),
 		app.MinSize(unit.Dp(880), unit.Dp(560)),
 	)
@@ -101,7 +101,7 @@ func Run(opts Options) error {
 func resolveMSAClientID(compiledIn string, manager *instance.Manager) string {
 	// The old variable name still works: it was the launcher's own before
 	// the rename, and breaking a shell profile over that would be rude.
-	for _, key := range []string{"MICROMANAGE_MSA_CLIENT_ID", "MIM_MSA_CLIENT_ID"} {
+	for _, key := range []string{"INSTANT_LAUNCHER_MSA_CLIENT_ID", "MIM_MSA_CLIENT_ID"} {
 		if id := strings.TrimSpace(os.Getenv(key)); id != "" {
 			return id
 		}
@@ -153,7 +153,7 @@ func RunMain(opts Options) {
 	go func() {
 		if err := Run(opts); err != nil {
 			// Reported on stderr because there may be no window to show it in.
-			os.Stderr.WriteString("micromanage: " + err.Error() + "\n")
+			os.Stderr.WriteString("instant-launcher: " + err.Error() + "\n")
 			os.Exit(1)
 		}
 		os.Exit(0)
@@ -330,7 +330,7 @@ func (u *ui) layoutTopBar(gtx layout.Context, snap launcher.Snapshot) layout.Dim
 								func(gtx layout.Context) layout.Dimensions {
 									return row(gtx, unit.Dp(10),
 										rigid(func(gtx layout.Context) layout.Dimensions { return slab(gtx, th.P.Sky, unit.Dp(20)) }),
-										rigid(func(gtx layout.Context) layout.Dimensions { return th.brand(gtx, "MicroManage", th.P.Text) }),
+										rigid(func(gtx layout.Context) layout.Dimensions { return th.brand(gtx, "Instant Launcher", th.P.Text) }),
 									)
 								})
 						})

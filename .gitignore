@@ -21,11 +21,11 @@ test-instances/
 personal-config/
 
 # Go build artifacts. Anchored to the repository root on purpose: unanchored,
-# the pattern also matched cmd/micromanage/, and every file
+# the pattern also matched cmd/instant-mc/, and every file
 # added there after this line was written was silently ignored.
-/micromanage
-/micromanage.exe
-/micromanage-launcher
+/instant-mc
+/instant-mc.exe
+/instant-launcher
 dist/
 *.log
 

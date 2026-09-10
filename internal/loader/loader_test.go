@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/launch"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/instance"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/launch"
 )
 
 // stubServices serves the shapes each loader project publishes.

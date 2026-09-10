@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/GeraldHofbauerWeb/micromanage/internal/auth"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/instance"
-	"github.com/GeraldHofbauerWeb/micromanage/internal/launcher"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/auth"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/instance"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/launcher"
 	"github.com/spf13/cobra"
 )
 
@@ -86,7 +86,7 @@ and the graphical launcher.`,
 		client := auth.NewMSA(msaClientID(manager))
 		if !client.Configured() {
 			return fmt.Errorf("%w; set it with 'config msa-client-id <id>' "+
-				"or the MICROMANAGE_MSA_CLIENT_ID environment variable", auth.ErrNotConfigured)
+				"or the INSTANT_LAUNCHER_MSA_CLIENT_ID environment variable", auth.ErrNotConfigured)
 		}
 		client.Observer = func(step string) { fmt.Fprintf(os.Stderr, "  %s\n", step) }
 
@@ -239,7 +239,7 @@ func msaClientID(manager *instance.Manager) string {
 // name is still accepted: it was the launcher's own before the rename, and
 // breaking someone's shell profile over a rename would be rude.
 func msaClientIDFromEnv() string {
-	for _, key := range []string{"MICROMANAGE_MSA_CLIENT_ID", "MIM_MSA_CLIENT_ID"} {
+	for _, key := range []string{"INSTANT_LAUNCHER_MSA_CLIENT_ID", "MIM_MSA_CLIENT_ID"} {
 		if id := strings.TrimSpace(os.Getenv(key)); id != "" {
 			return id
 		}
