@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="packaging/instant-launcher-plain.svg" alt="" width="132" height="132">
+  <img src="packaging/instant-launcher-plain.svg" alt="" width="132">
 </p>
 
 # Instant Launcher

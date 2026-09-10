@@ -39,7 +39,7 @@ GUI_TAGS :=
 GUI_BACKEND := Vulkan
 endif
 
-.PHONY: all build cli gui install install-desktop uninstall test lint clean run
+.PHONY: all build cli gui icon install install-desktop uninstall test lint clean run
 
 all: build
 
@@ -56,6 +56,14 @@ gui:
 # install puts both binaries on PATH and registers the GUI as a desktop
 # application, so the launcher is reachable from the application grid rather
 # than only from a terminal. It is idempotent and safe to run after every build.
+# The icon, the README mark and the mark the window draws all come from one
+# 3D model; regenerate them after editing packaging/mark/il_model.py.
+icon:
+	@cd packaging/mark && python3 iso_svg.py --svg ../$(DESKTOP_ID).svg \
+	    --plain ../$(DESKTOP_ID)-plain.svg --go ../../internal/gui/mark_faces.go
+	@cd packaging/mark && python3 write_obj.py 30 30 $(DESKTOP_ID)
+	@gofmt -w internal/gui/mark_faces.go
+
 install: build install-desktop
 	@install -Dm755 dist/$(CLI_BIN) $(BINDIR)/$(CLI_BIN)
 	@install -Dm755 dist/$(GUI_BIN) $(BINDIR)/$(GUI_BIN)
