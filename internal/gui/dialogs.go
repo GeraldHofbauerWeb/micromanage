@@ -94,10 +94,17 @@ type createDialog struct {
 	pickLoaderVer widget.Clickable
 	loader        instance.LoaderType
 
-	fromScratch, fromClone widget.Clickable
-	clone                  bool
-	cloneSource            string
-	pickSource             widget.Clickable
+	fromScratch, fromClone, fromMinecraft widget.Clickable
+	clone                                 bool
+	cloneSource                           string
+	pickSource                            widget.Clickable
+
+	// minecraft makes the dialog an import of the official launcher's
+	// .minecraft: the version is read from it rather than chosen, and the
+	// worlds and screenshots can come along.
+	minecraft                bool
+	withSaves, withShots     bool
+	toggleSaves, toggleShots widget.Clickable
 
 	confirm, cancel widget.Clickable
 }
@@ -119,6 +126,8 @@ func (d *createDialog) show(snap launcher.Snapshot, cloneFrom string) {
 	d.version = ""
 	d.clone = cloneFrom != ""
 	d.cloneSource = cloneFrom
+	d.minecraft = false
+	d.withSaves, d.withShots = true, true
 
 	if snap.Editing.MinecraftVersion != "" {
 		d.version = snap.Editing.MinecraftVersion
@@ -156,10 +165,22 @@ func (d *createDialog) Layout(gtx layout.Context, u *ui, snap launcher.Snapshot)
 		u.dialogs.pickLoaderVersion(u, d.loader, d.version, d.loaderVersion, func(v string) { d.loaderVersion = v })
 	}
 	if d.fromScratch.Clicked(gtx) {
-		d.clone = false
+		d.clone, d.minecraft = false, false
 	}
 	if d.fromClone.Clicked(gtx) {
-		d.clone = true
+		d.clone, d.minecraft = true, false
+	}
+	if d.fromMinecraft.Clicked(gtx) {
+		d.clone, d.minecraft = false, true
+		if strings.TrimSpace(d.name.Text()) == "" {
+			d.name.SetText(instance.DefaultInstanceName)
+		}
+	}
+	if d.toggleSaves.Clicked(gtx) {
+		d.withSaves = !d.withSaves
+	}
+	if d.toggleShots.Clicked(gtx) {
+		d.withShots = !d.withShots
 	}
 	if d.pickSource.Clicked(gtx) {
 		u.dialogs.pickInstance(u, d.cloneSource, func(v string) { d.cloneSource = v })
@@ -168,10 +189,22 @@ func (d *createDialog) Layout(gtx layout.Context, u *ui, snap launcher.Snapshot)
 		d.open = false
 	}
 
-	ready := strings.TrimSpace(d.name.Text()) != "" && d.version != "" &&
+	named := strings.TrimSpace(d.name.Text()) != ""
+	ready := named && d.version != "" &&
 		(d.loader == instance.LoaderVanilla || d.loaderVersion != "") &&
 		(!d.clone || d.cloneSource != "")
-	if ready && d.confirm.Clicked(gtx) {
+	if d.minecraft {
+		ready = named
+	}
+	if ready && d.minecraft && d.confirm.Clicked(gtx) {
+		u.ctrl.Dispatch(launcher.ActionImport{
+			Name:               strings.TrimSpace(d.name.Text()),
+			IncludeSaves:       d.withSaves,
+			IncludeScreenshots: d.withShots,
+		})
+		d.open = false
+	}
+	if ready && !d.minecraft && d.confirm.Clicked(gtx) {
 		action := launcher.ActionCreate{
 			Name:    strings.TrimSpace(d.name.Text()),
 			Version: d.version,
@@ -184,14 +217,49 @@ func (d *createDialog) Layout(gtx layout.Context, u *ui, snap launcher.Snapshot)
 		d.open = false
 	}
 
-	return column(gtx, sp3,
+	children := []layout.FlexChild{
 		rigid(func(gtx layout.Context) layout.Dimensions {
-			if d.clone && d.cloneSource != "" {
+			switch {
+			case d.minecraft:
+				return th.display(gtx, "Import your "+minecraftDir(snap))
+			case d.clone && d.cloneSource != "":
 				return th.display(gtx, "Duplicate "+d.cloneSource)
 			}
 			return th.display(gtx, "New instance")
 		}),
 		rigid(func(gtx layout.Context) layout.Dimensions { return th.field(gtx, d.name, "Name", "my-modpack") }),
+	}
+	// An import reads the version and loader from the official launcher's
+	// profile, so there is nothing to choose.
+	if !d.minecraft {
+		children = append(children, d.versionChildren(u, loaders)...)
+	}
+	children = append(children,
+		rigid(func(gtx layout.Context) layout.Dimensions { return d.layoutSource(gtx, u, snap) }),
+		rigid(func(gtx layout.Context) layout.Dimensions {
+			label := "Create"
+			if d.minecraft {
+				label = "Import"
+			}
+			return row(gtx, sp2,
+				rigid(func(gtx layout.Context) layout.Dimensions {
+					if !ready {
+						return th.secondary(gtx, &d.confirm, label)
+					}
+					return th.primary(gtx, &d.confirm, nil, label)
+				}),
+				rigid(func(gtx layout.Context) layout.Dimensions { return th.ghost(gtx, &d.cancel, nil, "Cancel") }),
+			)
+		}),
+	)
+	return column(gtx, sp3, children...)
+}
+
+// versionChildren are the loader, version and install note rows of a new
+// instance.
+func (d *createDialog) versionChildren(u *ui, loaders []instance.LoaderType) []layout.FlexChild {
+	th := u.th
+	return []layout.FlexChild{
 		rigid(func(gtx layout.Context) layout.Dimensions {
 			return column(gtx, unit.Dp(6),
 				rigid(func(gtx layout.Context) layout.Dimensions { return th.small(gtx, "Mod loader") }),
@@ -230,19 +298,7 @@ func (d *createDialog) Layout(gtx layout.Context, u *ui, snap launcher.Snapshot)
 			}
 			return th.wrapped(gtx, d.loader.Display()+" is installed into the shared store when the instance is created.", th.P.TextDim)
 		}),
-		rigid(func(gtx layout.Context) layout.Dimensions { return d.layoutSource(gtx, u, snap) }),
-		rigid(func(gtx layout.Context) layout.Dimensions {
-			return row(gtx, sp2,
-				rigid(func(gtx layout.Context) layout.Dimensions {
-					if !ready {
-						return th.secondary(gtx, &d.confirm, "Create")
-					}
-					return th.primary(gtx, &d.confirm, nil, "Create")
-				}),
-				rigid(func(gtx layout.Context) layout.Dimensions { return th.ghost(gtx, &d.cancel, nil, "Cancel") }),
-			)
-		}),
-	)
+	}
 }
 
 func (d *createDialog) layoutSource(gtx layout.Context, u *ui, snap launcher.Snapshot) layout.Dimensions {
@@ -251,12 +307,40 @@ func (d *createDialog) layoutSource(gtx layout.Context, u *ui, snap launcher.Sna
 		rigid(func(gtx layout.Context) layout.Dimensions { return th.small(gtx, "Start from") }),
 		rigid(func(gtx layout.Context) layout.Dimensions {
 			return row(gtx, unit.Dp(6),
-				rigid(func(gtx layout.Context) layout.Dimensions { return th.pill(gtx, &d.fromScratch, !d.clone, "Empty") }),
+				rigid(func(gtx layout.Context) layout.Dimensions {
+					return th.pill(gtx, &d.fromScratch, !d.clone && !d.minecraft, "Empty")
+				}),
 				rigid(func(gtx layout.Context) layout.Dimensions {
 					return th.pill(gtx, &d.fromClone, d.clone, "A copy of an instance")
 				}),
+				rigid(func(gtx layout.Context) layout.Dimensions {
+					if !snap.CanImport && !d.minecraft {
+						return layout.Dimensions{}
+					}
+					return th.pill(gtx, &d.fromMinecraft, d.minecraft, "Your "+minecraftDir(snap))
+				}),
 			)
 		}),
+	}
+
+	if d.minecraft {
+		children = append(children,
+			rigid(func(gtx layout.Context) layout.Dimensions {
+				return row(gtx, unit.Dp(6),
+					rigid(func(gtx layout.Context) layout.Dimensions { return th.smallIn(gtx, "Also copy", th.P.TextDim) }),
+					rigid(func(gtx layout.Context) layout.Dimensions { return th.pill(gtx, &d.toggleSaves, d.withSaves, "Worlds") }),
+					rigid(func(gtx layout.Context) layout.Dimensions {
+						return th.pill(gtx, &d.toggleShots, d.withShots, "Screenshots")
+					}),
+				)
+			}),
+			rigid(func(gtx layout.Context) layout.Dimensions {
+				return th.wrapped(gtx, "Mods, configs, packs and the game options are copied, the game files go into "+
+					"the shared store, and the version is read from the official launcher. "+
+					minecraftDir(snap)+" itself stays exactly as it is.", th.P.TextDim)
+			}),
+		)
+		return column(gtx, unit.Dp(6), children...)
 	}
 
 	if !d.clone {

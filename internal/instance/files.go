@@ -40,8 +40,8 @@ func (m *Manager) InstancePath(name string) (string, error) {
 	return filepath.Join(m.InstancesPath, name), nil
 }
 
-// CanDelete reports whether an instance may be removed. It is the single
-// source of truth for the "cannot delete the active instance" rule.
+// CanDelete reports whether an instance may be removed: it has to exist.
+// Whether it is running is the caller's to know.
 func (m *Manager) CanDelete(name string) error {
 	instancePath, err := m.InstancePath(name)
 	if err != nil {
@@ -49,9 +49,6 @@ func (m *Manager) CanDelete(name string) error {
 	}
 	if _, err := os.Stat(instancePath); os.IsNotExist(err) {
 		return fmt.Errorf("instance '%s' does not exist", name)
-	}
-	if m.GetActiveInstance() == name {
-		return fmt.Errorf("cannot delete active instance '%s'. Switch to another instance first", name)
 	}
 	return nil
 }

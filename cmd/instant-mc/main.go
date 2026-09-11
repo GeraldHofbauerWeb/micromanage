@@ -30,8 +30,9 @@ var defaultMSAClientID = ""
 var rootCmd = &cobra.Command{
 	Use:   "instant-mc",
 	Short: "A modern Minecraft instance manager and launcher",
-	Long: `A lightweight and efficient Minecraft instance manager that uses symlinks
-to instantly switch between different Minecraft setups without copying files.
+	Long: `A lightweight and efficient Minecraft instance manager and launcher. Each
+instance is a directory of its own that the game runs in directly, next to
+the official launcher's .minecraft, which is only ever read to import it.
 
 Run without a subcommand to start the graphical launcher.
 

@@ -13,9 +13,7 @@ import (
 
 func init() {
 	rootCmd.AddCommand(createCmd)
-	rootCmd.AddCommand(switchCmd)
 	rootCmd.AddCommand(listCmd)
-	rootCmd.AddCommand(restoreCmd)
 	rootCmd.AddCommand(deleteCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(repairPermsCmd)
@@ -34,6 +32,13 @@ func newManager() (*instance.Manager, error) {
 	manager, err := instance.NewManager()
 	if err != nil {
 		return nil, fmt.Errorf("initializing manager: %w", err)
+	}
+	switch {
+	case manager.LegacyErr != nil:
+		fmt.Fprintln(os.Stderr, "Warning:", manager.LegacyErr)
+	case manager.LegacyReleased:
+		fmt.Fprintf(os.Stderr, "%s was still linked to an instance, the way earlier versions left it; it is a plain directory again.\n",
+			manager.MinecraftPath)
 	}
 	return manager, nil
 }
@@ -55,9 +60,10 @@ resourcepacks and shaderpacks directories. Game content (versions, libraries,
 assets, runtimes) is shared rather than copied, so an empty instance costs
 almost nothing.
 
-Use --clone to copy an existing instance's content, or --from-minecraft for the
-pre-2.0 behaviour of copying the current .minecraft directory. Cloning excludes
-saves/ and screenshots/ unless you ask for them.`,
+Use --clone to copy an existing instance's content, or --from-minecraft to copy
+the official launcher's .minecraft (see also 'import', which brings its game
+files and settings along too). Cloning excludes saves/ and screenshots/ unless
+you ask for them.`,
 	Args:          cobra.ExactArgs(1),
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -137,34 +143,10 @@ func truncate(s string, max int) string {
 	return "…" + s[len(s)-max+1:]
 }
 
-var switchCmd = &cobra.Command{
-	Use:   "switch <instance-name>",
-	Short: "Switch to a Minecraft instance",
-	Long: `Switch to the specified Minecraft instance.
-This will backup your current .minecraft directory and create a symlink to the instance.`,
-	Args:          cobra.ExactArgs(1),
-	SilenceErrors: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		manager, err := newManager()
-		if err != nil {
-			return err
-		}
-
-		instanceName := args[0]
-		if err := manager.SwitchInstance(instanceName); err != nil {
-			return fmt.Errorf("switching instance: %w", err)
-		}
-
-		fmt.Printf("Switched to instance: %s\n", instanceName)
-		fmt.Println("Launch Minecraft normally - it will use this instance")
-		return nil
-	},
-}
-
 var listCmd = &cobra.Command{
 	Use:           "list",
 	Short:         "List all Minecraft instances",
-	Long:          `List all available Minecraft instances with their mod counts and status.`,
+	Long:          `List all available Minecraft instances with their mod counts, marking the one picked last.`,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		manager, err := newManager()
@@ -179,40 +161,18 @@ var listCmd = &cobra.Command{
 
 		fmt.Println("Available instances:")
 		if len(instances) == 0 {
-			fmt.Println("  No instances found")
-		} else {
-			for _, inst := range instances {
-				status := "Inactive"
-				if inst.IsActive {
-					status = "ACTIVE"
-				}
-				fmt.Printf("  - %-20s (%d mods, %d configs, %d saves) [%s]\n",
-					inst.Name, inst.ModCount, inst.ConfigCount, inst.SaveCount, status)
+			fmt.Println("  No instances found. Run 'import' to copy your .minecraft, or 'create <name>'.")
+			return nil
+		}
+		last := manager.LastInstance()
+		for _, inst := range instances {
+			mark := ""
+			if inst.Name == last {
+				mark = "  [last used]"
 			}
+			fmt.Printf("  - %-20s (%d mods, %d configs, %d saves)%s\n",
+				inst.Name, inst.ModCount, inst.ConfigCount, inst.SaveCount, mark)
 		}
-
-		fmt.Printf("\nCurrent instance: %s\n", manager.GetActiveInstance())
-		return nil
-	},
-}
-
-var restoreCmd = &cobra.Command{
-	Use:   "restore",
-	Short: "Restore default .minecraft directory",
-	Long: `Restore the original .minecraft directory by removing the current symlink
-and restoring from the backup.`,
-	SilenceErrors: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		manager, err := newManager()
-		if err != nil {
-			return err
-		}
-
-		if err := manager.RestoreDefault(); err != nil {
-			return fmt.Errorf("restoring default: %w", err)
-		}
-
-		fmt.Println("Restored default .minecraft directory")
 		return nil
 	},
 }
@@ -221,7 +181,7 @@ var deleteCmd = &cobra.Command{
 	Use:   "delete <instance-name>",
 	Short: "Delete a Minecraft instance",
 	Long: `Delete the specified Minecraft instance permanently.
-Note: You cannot delete the currently active instance.`,
+The official launcher's .minecraft is never touched.`,
 	Args:          cobra.ExactArgs(1),
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -314,7 +274,7 @@ config command usage:
 	config <key>
 	config <key> <path>
 
-Supported keys: minecraft-path, instances-path, backup-path
+Supported keys: minecraft-path, instances-path, msa-client-id
 */
 var configCmd = &cobra.Command{
 	Use:   "config <key|show> [path]",
@@ -385,8 +345,6 @@ func normalizeConfigKey(key string) string {
 		return "minecraft-path"
 	case "instances", "instances-dir":
 		return "instances-path"
-	case "backup", "backup-dir":
-		return "backup-path"
 	case "msa", "client-id", "msa-client":
 		return "msa-client-id"
 	}

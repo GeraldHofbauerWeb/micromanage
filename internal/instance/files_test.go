@@ -124,9 +124,11 @@ func TestDeleteContentSymlinkEscape(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// A symlink inside mods/ pointing at a directory outside the instance.
+	// A link inside mods/ pointing at a directory outside the instance; on
+	// Windows without Developer Mode a junction, which must not be followed
+	// either.
 	link := filepath.Join(path, "mods", "escape")
-	if err := os.Symlink(outsideDir, link); err != nil {
+	if err := linkDir(outsideDir, link); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
 
@@ -148,20 +150,12 @@ func TestDeleteContentUnknownKind(t *testing.T) {
 	}
 }
 
-func TestCanDeleteRejectsActiveInstance(t *testing.T) {
+func TestCanDeleteNeedsAnExistingInstance(t *testing.T) {
 	m := newTestManager(t)
-	target := mkInstance(t, m, "pack")
-	mkInstance(t, m, "other")
+	mkInstance(t, m, "pack")
 
-	if err := os.Symlink(target, m.MinecraftPath); err != nil {
-		t.Skipf("symlinks unavailable: %v", err)
-	}
-
-	if err := m.CanDelete("pack"); err == nil {
-		t.Fatal("CanDelete(active) = nil, want an error")
-	}
-	if err := m.CanDelete("other"); err != nil {
-		t.Fatalf("CanDelete(inactive) = %v, want nil", err)
+	if err := m.CanDelete("pack"); err != nil {
+		t.Fatalf("CanDelete(pack) = %v, want nil", err)
 	}
 	if err := m.CanDelete("missing"); err == nil {
 		t.Fatal("CanDelete(missing) = nil, want an error")
@@ -170,7 +164,7 @@ func TestCanDeleteRejectsActiveInstance(t *testing.T) {
 
 func TestConfigKeysAreOrderedAndEditableFlagged(t *testing.T) {
 	keys := ConfigKeys()
-	want := []string{"minecraft-path", "instances-path", "backup-path", "msa-client-id", "app-dir", "config-file"}
+	want := []string{"minecraft-path", "instances-path", "msa-client-id", "app-dir", "config-file"}
 	if len(keys) != len(want) {
 		t.Fatalf("got %d keys, want %d", len(keys), len(want))
 	}
@@ -187,7 +181,7 @@ func TestConfigKeysAreOrderedAndEditableFlagged(t *testing.T) {
 			t.Errorf("%q reported as editable, but UpdateConfig rejects it", k)
 		}
 	}
-	for _, k := range []string{"minecraft-path", "instances-path", "backup-path", "msa-client-id"} {
+	for _, k := range []string{"minecraft-path", "instances-path", "msa-client-id"} {
 		if !IsEditableConfigKey(k) {
 			t.Errorf("%q reported as read-only, but UpdateConfig accepts it", k)
 		}

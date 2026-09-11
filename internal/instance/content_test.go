@@ -193,21 +193,18 @@ func TestDeleteContentNested(t *testing.T) {
 	}
 }
 
-func TestRenameInstanceRelinksActive(t *testing.T) {
+func TestRenameInstanceMovesItAndItsName(t *testing.T) {
 	m := newTestManager(t)
 	path := mkInstance(t, m, "old")
 	if err := SaveMeta(path, DefaultMeta("old")); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(path, m.MinecraftPath); err != nil {
-		t.Skipf("symlinks unavailable: %v", err)
-	}
 
 	if err := m.RenameInstance("old", "new"); err != nil {
 		t.Fatal(err)
 	}
-	if m.GetActiveInstance() != "new" {
-		t.Errorf("active = %q after rename, want new", m.GetActiveInstance())
+	if _, err := os.Lstat(m.MinecraftPath); !os.IsNotExist(err) {
+		t.Errorf("renaming an instance touched %s: %v", m.MinecraftPath, err)
 	}
 	if _, err := os.Stat(filepath.Join(m.InstancesPath, "new", "mods")); err != nil {
 		t.Error("renamed instance missing")

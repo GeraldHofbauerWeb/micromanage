@@ -9,35 +9,56 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
 const (
 	InstancesDir  = ".minecraft-instances"
 	MinecraftDir  = ".minecraft"
-	BackupSuffix  = ".backup"
 	AppFolderName = "instant-launcher" // folder inside OS config/app support dir
 )
 
 type Config struct {
 	InstancesPath string `json:"instances_path"`
 	MinecraftPath string `json:"minecraft_path"`
-	BackupPath    string `json:"backup_path"`
+	// BackupPath is where versions before 2 parked the original .minecraft
+	// while it was a link; it is only read to put that directory back.
+	BackupPath string `json:"backup_path"`
 	// MSAClientID is the Azure application id Microsoft sign-in runs against.
 	// It lives here rather than only in the binary so a player can point the
 	// launcher at their own registration without rebuilding it.
 	MSAClientID string `json:"msa_client_id,omitempty"`
+	// LastInstance is the instance the player picked last, which the start
+	// screen offers to play.
+	LastInstance string `json:"last_instance,omitempty"`
 }
 
 type Manager struct {
-	HomeDir       string
-	AppDir        string
-	ConfigFile    string
+	HomeDir    string
+	AppDir     string
+	ConfigFile string
+	// InstancesPath holds the instances, each a directory the game is started
+	// in directly.
 	InstancesPath string
+	// MinecraftPath is the official launcher's directory. The launcher only
+	// ever reads it, to import it as an instance.
 	MinecraftPath string
-	BackupPath    string
-	MSAClientID   string
-	cfg           Config
+	// BackupPath is where versions before 2 parked the original .minecraft;
+	// see ReleaseLegacyLink.
+	BackupPath  string
+	MSAClientID string
+
+	// LegacyReleased reports that NewManager found .minecraft still linked to
+	// an instance, the way versions before 2 left it, and made it a plain
+	// directory again. LegacyErr is set when that went wrong.
+	LegacyReleased bool
+	LegacyErr      error
+
+	// cfgMu guards cfg: the window's workers save the last instance while
+	// another may be changing a path.
+	cfgMu sync.Mutex
+	cfg   Config
 }
 
 type Instance struct {
@@ -49,7 +70,6 @@ type Instance struct {
 	DisabledMods int
 	ConfigCount  int
 	SaveCount    int
-	IsActive     bool
 
 	// v2 metadata, read from instance.json. Instances created before it
 	// existed report Configured false and leave the rest zero.
@@ -126,7 +146,54 @@ func NewManager() (*Manager, error) {
 		}
 	}
 
+	m.LegacyReleased, m.LegacyErr = m.ReleaseLegacyLink()
 	return m, nil
+}
+
+// ReleaseLegacyLink undoes what versions before 2 did to .minecraft: they
+// replaced it with a link to the active instance and parked the original at
+// BackupPath. The link is removed and the original put back, so the official
+// launcher finds its own directory again. The instances are not touched.
+//
+// Only a link into InstancesPath is removed; a link the player made
+// themselves is none of the launcher's business.
+func (m *Manager) ReleaseLegacyLink() (bool, error) {
+	if !isDirLink(m.MinecraftPath) {
+		return false, nil
+	}
+	target, err := os.Readlink(m.MinecraftPath)
+	if err != nil {
+		return false, nil
+	}
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(filepath.Dir(m.MinecraftPath), target)
+	}
+	if m.InstancesPath == "" || !within(target, m.InstancesPath) {
+		return false, nil
+	}
+
+	// Removing a symlink or a junction removes the link alone, never what it
+	// points at.
+	if err := os.Remove(m.MinecraftPath); err != nil {
+		return false, fmt.Errorf("removing the link at %s: %w", m.MinecraftPath, err)
+	}
+	if m.BackupPath == "" {
+		return true, nil
+	}
+	if info, err := os.Stat(m.BackupPath); err == nil && info.IsDir() {
+		if err := os.Rename(m.BackupPath, m.MinecraftPath); err != nil {
+			return true, fmt.Errorf("the link at %s is gone, but putting the original back from %s failed: %w",
+				m.MinecraftPath, m.BackupPath, err)
+		}
+	}
+	return true, nil
+}
+
+// ReloadConfig reads the configuration file again, the way a restart would.
+func (m *Manager) ReloadConfig() error {
+	m.cfgMu.Lock()
+	defer m.cfgMu.Unlock()
+	return m.loadConfig()
 }
 
 func (m *Manager) loadConfig() error {
@@ -165,6 +232,13 @@ func (m *Manager) loadConfig() error {
 }
 
 func (m *Manager) saveConfig() error {
+	m.cfgMu.Lock()
+	defer m.cfgMu.Unlock()
+	return m.writeConfig()
+}
+
+// writeConfig persists the configuration; the caller holds cfgMu.
+func (m *Manager) writeConfig() error {
 	m.cfg.InstancesPath = m.InstancesPath
 	m.cfg.MinecraftPath = m.MinecraftPath
 	m.cfg.BackupPath = m.BackupPath
@@ -173,6 +247,9 @@ func (m *Manager) saveConfig() error {
 	data, err := json.MarshalIndent(m.cfg, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to encode config: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(m.ConfigFile), 0o755); err != nil {
+		return fmt.Errorf("failed to create config dir: %w", err)
 	}
 	if err := os.WriteFile(m.ConfigFile, data, 0644); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
@@ -228,9 +305,42 @@ func getDefaultMinecraftPath() (string, error) {
 	}
 }
 
+// LastInstance names the instance the player picked last, or "" when there is
+// none or it has since gone.
+func (m *Manager) LastInstance() string {
+	m.cfgMu.Lock()
+	name := m.cfg.LastInstance
+	m.cfgMu.Unlock()
+	if name == "" {
+		return ""
+	}
+	path, err := m.InstancePath(name)
+	if err != nil {
+		return ""
+	}
+	if info, err := os.Stat(path); err != nil || !info.IsDir() {
+		return ""
+	}
+	return name
+}
+
+// SetLastInstance remembers the instance the player picked last; "" forgets
+// it. A manager without a configuration file keeps it in memory only.
+func (m *Manager) SetLastInstance(name string) error {
+	m.cfgMu.Lock()
+	defer m.cfgMu.Unlock()
+	if m.cfg.LastInstance == name {
+		return nil
+	}
+	m.cfg.LastInstance = name
+	if m.ConfigFile == "" {
+		return nil
+	}
+	return m.writeConfig()
+}
+
 // UpdateConfig updates one of the supported config keys and persists the file.
-// Supported keys: "minecraft-path", "instances-path", "backup-path",
-// "msa-client-id"
+// Supported keys: "minecraft-path", "instances-path", "msa-client-id"
 func (m *Manager) UpdateConfig(key, value string) error {
 	// An application id is not a path, so it is set before the expansion the
 	// path keys need.
@@ -249,8 +359,6 @@ func (m *Manager) UpdateConfig(key, value string) error {
 		if err := os.MkdirAll(m.InstancesPath, 0755); err != nil {
 			return fmt.Errorf("failed to create instances dir: %w", err)
 		}
-	case "backup-path", "backup-dir", "backup":
-		m.BackupPath = value
 	default:
 		return fmt.Errorf("unknown config key: %s", key)
 	}
@@ -265,7 +373,6 @@ func (m *Manager) GetConfig() map[string]string {
 	return map[string]string{
 		"minecraft-path": m.MinecraftPath,
 		"instances-path": m.InstancesPath,
-		"backup-path":    m.BackupPath,
 		"app-dir":        m.AppDir,
 		"config-file":    m.ConfigFile,
 		"msa-client-id":  m.MSAClientID,
@@ -347,62 +454,6 @@ func (m *Manager) CreateInstanceWithOptions(name string, o CreateOptions) error 
 	return nil
 }
 
-func (m *Manager) SwitchInstance(name string) error {
-	instancePath, err := m.InstancePath(name)
-	if err != nil {
-		return err
-	}
-
-	// Check if instance exists
-	if _, err := os.Stat(instancePath); os.IsNotExist(err) {
-		return fmt.Errorf("instance '%s' does not exist", name)
-	}
-
-	// Backup current minecraft directory if it exists and is not a symlink
-	if info, err := os.Lstat(m.MinecraftPath); err == nil {
-		if info.Mode()&os.ModeSymlink == 0 {
-			// It's a regular directory, back it up
-			if err := os.RemoveAll(m.BackupPath); err != nil {
-				return fmt.Errorf("failed to remove old backup: %w", err)
-			}
-			if err := os.Rename(m.MinecraftPath, m.BackupPath); err != nil {
-				return fmt.Errorf("failed to backup minecraft directory: %w", err)
-			}
-		} else {
-			// It's already a symlink, just remove it
-			if err := os.Remove(m.MinecraftPath); err != nil {
-				return fmt.Errorf("failed to remove existing symlink: %w", err)
-			}
-		}
-	}
-
-	// Create symlink to instance
-	if err := os.Symlink(instancePath, m.MinecraftPath); err != nil {
-		return fmt.Errorf("failed to create symlink: %w", err)
-	}
-
-	return nil
-}
-
-func (m *Manager) RestoreDefault() error {
-	// Check if minecraft path is a symlink
-	if info, err := os.Lstat(m.MinecraftPath); err == nil && info.Mode()&os.ModeSymlink != 0 {
-		// Remove the symlink
-		if err := os.Remove(m.MinecraftPath); err != nil {
-			return fmt.Errorf("failed to remove symlink: %w", err)
-		}
-	}
-
-	// Restore backup if it exists
-	if _, err := os.Stat(m.BackupPath); err == nil {
-		if err := os.Rename(m.BackupPath, m.MinecraftPath); err != nil {
-			return fmt.Errorf("failed to restore backup: %w", err)
-		}
-	}
-
-	return nil
-}
-
 func (m *Manager) ListInstances() ([]Instance, error) {
 	var instances []Instance
 
@@ -417,9 +468,6 @@ func (m *Manager) ListInstances() ([]Instance, error) {
 		return nil, fmt.Errorf("failed to read instances directory: %w", err)
 	}
 
-	// Get current active instance
-	activeInstance := m.GetActiveInstance()
-
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -429,9 +477,8 @@ func (m *Manager) ListInstances() ([]Instance, error) {
 		instancePath := filepath.Join(m.InstancesPath, name)
 
 		instance := Instance{
-			Name:     name,
-			Path:     instancePath,
-			IsActive: name == activeInstance,
+			Name: name,
+			Path: instancePath,
 		}
 
 		// Count mods
@@ -464,15 +511,6 @@ func (m *Manager) ListInstances() ([]Instance, error) {
 	})
 
 	return instances, nil
-}
-
-func (m *Manager) GetActiveInstance() string {
-	if info, err := os.Lstat(m.MinecraftPath); err == nil && info.Mode()&os.ModeSymlink != 0 {
-		if target, err := os.Readlink(m.MinecraftPath); err == nil {
-			return filepath.Base(target)
-		}
-	}
-	return "default"
 }
 
 func (m *Manager) DeleteInstance(name string) error {

@@ -39,7 +39,7 @@ func demoSnapshot() launcher.Snapshot {
 		{Name: "sebsmodpack4", Path: "/home/gerry/.minecraft-instances/sebsmodpack4", ModCount: 136, ConfigCount: 136, SaveCount: 75,
 			Configured: true, MinecraftVersion: "1.21.1",
 			Loader: instance.LoaderSpec{Type: instance.LoaderNeoForge, Version: "21.1.227"}},
-		{Name: "sebsmodpack5", Path: "/home/gerry/.minecraft-instances/sebsmodpack5", ModCount: 153, DisabledMods: 2, ConfigCount: 135, SaveCount: 1, IsActive: true,
+		{Name: "sebsmodpack5", Path: "/home/gerry/.minecraft-instances/sebsmodpack5", ModCount: 153, DisabledMods: 2, ConfigCount: 135, SaveCount: 1,
 			Configured: true, MinecraftVersion: "1.21.1",
 			Loader:     instance.LoaderSpec{Type: instance.LoaderNeoForge, Version: "21.1.248"},
 			LastPlayed: time.Now().Add(-3 * time.Hour)},
@@ -113,6 +113,8 @@ func demoSnapshot() launcher.Snapshot {
 		HasAccount:       true,
 		Instances:        instances,
 		Selected:         "sebsmodpack5",
+		LastInstance:     "sebsmodpack5",
+		CanImport:        true,
 		Content:          content,
 		ContentFor:       "sebsmodpack5",
 		ProfileInstalled: true,
@@ -139,7 +141,6 @@ func demoSnapshot() launcher.Snapshot {
 		Config: map[string]string{
 			"minecraft-path": "/home/gerry/.minecraft",
 			"instances-path": "/home/gerry/.minecraft-instances",
-			"backup-path":    "/home/gerry/.config/instant-launcher/backup",
 		},
 		Status: "6 instances",
 		Stats:  demoStats(now),
@@ -216,9 +217,20 @@ func TestRenderScreens(t *testing.T) {
 	unselected := demoSnapshot()
 	unselected.Selected = ""
 
-	adopting := empty
-	adopting.Task = launcher.Task{ID: 4, Kind: launcher.TaskAdopt, Label: "Adopting your .minecraft as Default",
-		Phase: "Sharing its game files", Message: "1204 files, 612 MB", Started: time.Now()}
+	// Without a .minecraft to import, the first start offers the dialog.
+	noMinecraft := empty
+	noMinecraft.CanImport = false
+
+	importing := empty
+	importing.Task = launcher.Task{ID: 4, Kind: launcher.TaskImport, Label: "Importing your .minecraft as Default",
+		Phase: "Copying your .minecraft", Progress: download.Progress{BytesDone: 380 << 20, BytesTotal: 1210 << 20,
+			Current: "saves/Sebis Welt/region/r.0.0.mca"}, Started: time.Now()}
+	wizardImport := func(u *ui) { u.bench.wizard.step = wizardImport }
+	importDialog := func(u *ui) {
+		u.dialogs.openCreate(demoSnapshot(), "")
+		u.dialogs.create.minecraft = true
+		u.dialogs.create.name.SetText(instance.DefaultInstanceName)
+	}
 
 	login := demoSnapshot()
 	login.Screen = launcher.ScreenLogin
@@ -272,8 +284,9 @@ func TestRenderScreens(t *testing.T) {
 		u.pointer = image.Pt(150, 205)
 		u.openInstanceMenu(snap, snap.Instances[1])
 	}
-	contextMenuActive := func(u *ui) {
+	contextMenuRunning := func(u *ui) {
 		snap := demoSnapshot()
+		snap.Game = launcher.GameState{Instance: snap.Instances[2].Name, Running: true}
 		u.pointer = image.Pt(150, 268)
 		u.openInstanceMenu(snap, snap.Instances[2])
 	}
@@ -316,9 +329,13 @@ func TestRenderScreens(t *testing.T) {
 		{"instance-settings", demoSnapshot(), instanceSettings},
 		{"instance-options", demoSnapshot(), optionsCard},
 		{"context-menu", demoSnapshot(), contextMenu},
-		{"context-menu-active", demoSnapshot(), contextMenuActive},
-		{"adopting", adopting, nil},
+		{"context-menu-running", running, contextMenuRunning},
+		{"wizard", empty, nil},
+		{"wizard-import", empty, wizardImport},
+		{"wizard-no-minecraft", noMinecraft, nil},
+		{"importing", importing, nil},
 		{"dialog-create", demoSnapshot(), createDialog},
+		{"dialog-import", demoSnapshot(), importDialog},
 		{"picker-loader", withVersions, pickerLoader},
 		{"picker-fetching", fetching, pickerFetching},
 		{"not-installed", notInstalled, instanceSettings},
@@ -327,7 +344,6 @@ func TestRenderScreens(t *testing.T) {
 		{"dialog-delete", demoSnapshot(), deleteDialog},
 		{"launching", launching, nil},
 		{"running", running, nil},
-		{"empty", empty, nil},
 		{"unselected", unselected, nil},
 		{"login", login, nil},
 		{"login-first-run", firstRun, nil},

@@ -19,19 +19,13 @@ func ConfigKeys() []ConfigKey {
 		{
 			Key:         "minecraft-path",
 			Label:       "Minecraft directory",
-			Description: "The path Minecraft launches from; the active instance is linked here.",
+			Description: "The official launcher's directory. It is only read, to import it as an instance.",
 			Editable:    true,
 		},
 		{
 			Key:         "instances-path",
 			Label:       "Instances directory",
-			Description: "Where instance directories are stored.",
-			Editable:    true,
-		},
-		{
-			Key:         "backup-path",
-			Label:       "Backup directory",
-			Description: "Where the original .minecraft is kept while an instance is active.",
+			Description: "Where instance directories are stored. Each is the game directory of its instance.",
 			Editable:    true,
 		},
 		{

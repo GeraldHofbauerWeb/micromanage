@@ -6,24 +6,28 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 Instant Launcher is a Go application that manages multiple Minecraft installations and launches them. It provides a graphical launcher (Gio) and a command-line interface; the Bubble Tea TUI was removed in v2.
 
-It resolves versions, downloads libraries, assets and natives into a store shared across instances, picks a matching Java runtime and builds the launch command line itself. Switching between instances still uses symlinks.
+It resolves versions, downloads libraries, assets and natives into a store shared across instances, picks a matching Java runtime and builds the launch command line itself.
 
 **Tech stack**: Go, Cobra (CLI), Viper (config), Gio (GUI)
 
 ## Core Architecture
 
-### Symlink-Based Design
+### Instances side by side
 The system works by:
-1. Storing instances in `~/.minecraft-instances/`
-2. Creating symlinks from `~/.minecraft` to the active instance
-3. Backing up the original `.minecraft` directory to `.minecraft.backup`
+1. Storing instances in the instances directory (`<config dir>/instant-launcher/instances` by default)
+2. Launching the game with `--gameDir` set to the instance itself, so there is no "active" instance and nothing to switch
+3. Leaving the official launcher's `.minecraft` alone: it is only read, to import it as an instance (`import`, or the GUI's first-start wizard)
+
+Versions before 2 replaced `.minecraft` with a link to the active instance.
+`Manager.ReleaseLegacyLink` undoes that on startup: a link into the instances
+directory is removed and the original put back from the old backup path.
 
 ### Directory Structure
 ```
-~/.minecraft-instances/
-├── vanilla/           # Clean Minecraft instance
-├── modpack-1.20.1/   # Modded instance
-└── testing/          # Development instance
+instances/
+├── Default/           # Imported from .minecraft
+├── modpack-1.20.1/    # Modded instance
+└── testing/           # Development instance
 ```
 
 ### Key components
@@ -53,9 +57,8 @@ make test
 
 # Test all core functions
 ./instant-mc create test-instance
-./instant-mc switch test-instance
 ./instant-mc list
-./instant-mc restore
+./instant-mc launch test-instance --offline Tester --dry-run
 
 # Clean up test instance
 ./instant-mc delete test-instance
@@ -95,7 +98,7 @@ go list -u -m all
 ## Application Architecture
 
 ### Key types
-- `instance.Manager` — instances, config and the symlink
+- `instance.Manager` — instances, config and the import of `.minecraft`
 - `instance.Meta` — per-instance settings in `instance.json`
 - `mojang.Version` — a version manifest, both argument schemas
 - `launch.Layout` — the shared store's paths
@@ -104,10 +107,9 @@ go list -u -m all
 - `launcher.Controller` / `launcher.Store` — GUI logic, Gio-free
 
 ### Safety mechanisms
-- Always backs up current .minecraft before switching
-- Validates instance exists before switching  
-- Uses symlinks (non-destructive, easily reversible)
-- Provides restore functionality
+- Never writes to the official launcher's `.minecraft`; an import copies from it, and a test checks it is unchanged afterwards
+- A cancelled or failed import removes the half-made instance, and nothing else
+- A running instance cannot be deleted or renamed
 - Confirmation dialogs for destructive operations
 - Proper error handling and user feedback
 
@@ -123,7 +125,7 @@ go list -u -m all
 ### Testing Approach
 - Test with different Minecraft directory states (exists/doesn't exist)
 - Test error conditions (invalid instance names, missing directories, permission issues)
-- Verify symlink creation and backup functionality  
+- Verify an import leaves `.minecraft` exactly as it was
 - Test mod/config/save counting accuracy
 - Test CLI command parsing and validation
 
@@ -136,14 +138,13 @@ go list -u -m all
 ## Platform Considerations
 
 ### Linux/macOS
-- Uses standard Unix tools (ln, mv, cp, find)
-- Symlink behavior is consistent
 - Path handling uses standard shell expansion
+- macOS calls the official directory `minecraft`, without the dot
 
 ### Windows/WSL
-- May require different symlink handling
-- Path separators and permissions might differ
-- Consider Windows Minecraft launcher behavior
+- No symlinks or special privileges are needed: instances are plain folders
+- Path separators and permissions might differ (file modes are not kept)
+- The official launcher may hold files in `.minecraft` open; an import only reads, so that does not matter
 
 ## Instance Management Patterns
 
@@ -153,8 +154,8 @@ go list -u -m all
 - Keep separate instances for different Minecraft versions
 
 ### Backup Strategy
-- Original .minecraft is always preserved as .minecraft.backup
-- Create dated backup instances before major changes
+- The official launcher's `.minecraft` is never modified
+- Create dated backup instances before major changes (`create <name> --clone <instance> --with-saves`)
 - Use tar/zip for sharing instances between systems
 
 ### Mod Organization
@@ -177,6 +178,11 @@ go list -u -m all
    returns defaults and touches nothing, so `list` cannot migrate anything.
 
 ## Things that have bitten us
+
+- Replacing `.minecraft` with a link to the active instance (v1) meant renaming
+  a directory the official launcher, Windows and virus scanners hold open. On
+  Windows that fails with "Access is denied" at the worst moment. Instances now
+  run in their own folders, and `.minecraft` is only read.
 
 - `copyFile` once ended in `os.WriteFile(dst, data, 0644)`, which stripped the
   executable bit from bundled Java runtimes and left instances unable to run

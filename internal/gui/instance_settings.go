@@ -39,8 +39,8 @@ type instanceSettings struct {
 
 	save, detect widget.Clickable
 
-	rename, duplicate, remove, activate widget.Clickable
-	newName                             *widget.Editor
+	rename, duplicate, remove widget.Clickable
+	newName                   *widget.Editor
 
 	// The game options card: a label for the next snapshot, the buttons on
 	// the file, and one Restore/Delete pair per snapshot.
@@ -154,9 +154,6 @@ func (s *instanceSettings) Layout(gtx layout.Context, u *ui, snap launcher.Snaps
 	}
 	if s.remove.Clicked(gtx) {
 		u.dialogs.openDelete(inst)
-	}
-	if s.activate.Clicked(gtx) {
-		u.dispatch(launcher.ActionSetActive{Name: snap.Selected})
 	}
 	s.updateOptions(gtx, u, snap)
 
@@ -279,6 +276,7 @@ func (s *instanceSettings) layoutJava(gtx layout.Context, u *ui) layout.Dimensio
 
 func (s *instanceSettings) layoutInstance(gtx layout.Context, u *ui, snap launcher.Snapshot, inst instance.Instance) layout.Dimensions {
 	th := u.th
+	running := snap.Game.Running && snap.Game.Instance == inst.Name
 	return th.card(gtx, func(gtx layout.Context) layout.Dimensions {
 		gtx.Constraints.Min.X = gtx.Constraints.Max.X
 		return column(gtx, sp3,
@@ -293,29 +291,16 @@ func (s *instanceSettings) layoutInstance(gtx layout.Context, u *ui, snap launch
 				)
 			}),
 			rigid(func(gtx layout.Context) layout.Dimensions {
-				return th.wrapped(gtx, "Folder: "+inst.Path, th.P.TextDim)
-			}),
-			rigid(func(gtx layout.Context) layout.Dimensions {
-				if inst.IsActive {
-					return th.wrapped(gtx, "This is the active instance: .minecraft points to it, so the "+
-						"official launcher starts it too.", th.P.TextDim)
-				}
-				return th.wrapped(gtx, "Not the active instance. Setting it active points .minecraft at it.", th.P.TextDim)
+				return th.wrapped(gtx, "Folder: "+inst.Path+" — the game runs in it directly.", th.P.TextDim)
 			}),
 			rigid(func(gtx layout.Context) layout.Dimensions { return hairline(gtx, th.P.LineDim) }),
 			rigid(func(gtx layout.Context) layout.Dimensions {
 				return row(gtx, sp2,
 					rigid(func(gtx layout.Context) layout.Dimensions { return th.ghost(gtx, &s.duplicate, u.ic.Add, "Duplicate") }),
-					rigid(func(gtx layout.Context) layout.Dimensions {
-						if inst.IsActive {
-							return layout.Dimensions{}
-						}
-						return th.ghost(gtx, &s.activate, u.ic.Check, "Set active")
-					}),
 					flexFill(),
 					rigid(func(gtx layout.Context) layout.Dimensions {
-						if inst.IsActive {
-							return th.smallIn(gtx, "The active instance cannot be deleted", th.P.TextDim)
+						if running {
+							return th.smallIn(gtx, "Stop the game to delete it", th.P.TextDim)
 						}
 						return th.danger(gtx, &s.remove, u.ic.Delete, "Delete instance")
 					}),

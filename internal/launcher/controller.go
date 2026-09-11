@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -108,11 +109,13 @@ type (
 	ActionRestoreOptions struct{ Name, Snapshot string }
 	// ActionDeleteOptionsSnapshot removes one saved copy.
 	ActionDeleteOptionsSnapshot struct{ Name, Snapshot string }
-	// ActionAdopt turns the current .minecraft into an instance.
-	ActionAdopt struct{ Name string }
-	// ActionSetActive points .minecraft at an instance, which is what the
-	// official launcher and anything else reading that directory then see.
-	ActionSetActive struct{ Name string }
+	// ActionImport copies the official launcher's .minecraft into a new
+	// instance, and its game files into the store. .minecraft is only read.
+	ActionImport struct {
+		Name               string
+		IncludeSaves       bool
+		IncludeScreenshots bool
+	}
 )
 
 func (ActionRefresh) isAction()        {}
@@ -143,8 +146,7 @@ func (ActionSetConfig) isAction()      {}
 func (ActionSaveOptions) isAction()           {}
 func (ActionRestoreOptions) isAction()        {}
 func (ActionDeleteOptionsSnapshot) isAction() {}
-func (ActionAdopt) isAction()                 {}
-func (ActionSetActive) isAction()             {}
+func (ActionImport) isAction()                {}
 
 // Event is a state change produced by a worker.
 type Event struct {
@@ -168,6 +170,10 @@ type Controller struct {
 	// MSAClientID is the Azure application id Microsoft sign-in runs against.
 	// Empty leaves the launcher able to make local accounts only.
 	MSAClientID string
+	// BuiltInMSAClientID is the id compiled into the build, the fallback
+	// when a changed setting leaves neither the environment nor the
+	// configuration naming one.
+	BuiltInMSAClientID string
 	// MSAEndpoints overrides the sign-in services, which only a test does.
 	MSAEndpoints auth.Endpoints
 	Version      string
@@ -186,9 +192,10 @@ type Controller struct {
 	events chan Event
 
 	nextTask atomic.Int64
-	// adoptTried makes the first-run adoption a one-shot: a refresh that
-	// still finds no instances afterwards does not try again.
-	adoptTried atomic.Bool
+	// legacyReported makes the note about a released .minecraft link, which
+	// the manager may have made at startup, appear once rather than on every
+	// refresh.
+	legacyReported atomic.Bool
 
 	mu      sync.Mutex
 	cancels map[TaskID]context.CancelFunc
@@ -196,6 +203,10 @@ type Controller struct {
 
 	// sessionMu serialises Microsoft session renewals; see renewSession.
 	sessionMu sync.Mutex
+
+	// msaOverride takes over from MSAClientID once the id is changed in
+	// Settings, so sign-in works without restarting the launcher.
+	msaOverride atomic.Pointer[string]
 }
 
 const (
@@ -312,7 +323,6 @@ func (c *Controller) run(ctx context.Context, id TaskID, a Action) {
 	switch action := a.(type) {
 	case ActionRefresh:
 		c.doRefresh(ctx)
-		c.maybeAdopt(ctx, id)
 	case ActionSelect:
 		c.doSelect(action.Name)
 	case ActionLoginOffline:
@@ -369,83 +379,81 @@ func (c *Controller) run(ctx context.Context, id TaskID, a Action) {
 		c.doRestoreOptions(action)
 	case ActionDeleteOptionsSnapshot:
 		c.doDeleteOptionsSnapshot(action)
-	case ActionAdopt:
-		c.doAdopt(ctx, id, action.Name)
-	case ActionSetActive:
-		c.doSetActive(ctx, action.Name)
+	case ActionImport:
+		c.doImport(ctx, id, action)
 	}
 }
 
-// doSetActive makes an instance the one .minecraft links to.
-func (c *Controller) doSetActive(ctx context.Context, name string) {
-	if err := c.Manager.SwitchInstance(name); err != nil {
-		c.fail(err)
-		return
-	}
-	c.setStatus(name + " is the active instance now · " + filepath.Base(c.Manager.MinecraftPath) + " points to it")
-	c.doRefresh(ctx)
-}
-
-// maybeAdopt runs the first-run adoption: with no instances yet and a real
-// .minecraft on disk, that directory becomes the instance Default, so the
-// player's existing worlds and settings are the first thing in the list
-// rather than something to recreate.
-func (c *Controller) maybeAdopt(ctx context.Context, id TaskID) {
-	if c.adoptTried.Load() || !c.Manager.CanAdopt() {
-		return
-	}
-	c.adoptTried.Store(true)
-	c.doAdopt(ctx, id, instance.DefaultInstanceName)
-}
-
-// doAdopt moves .minecraft into the instances directory, links it back,
-// and shares its game files into the store so nothing is downloaded twice.
-func (c *Controller) doAdopt(ctx context.Context, id TaskID, name string) {
+// doImport copies the player's .minecraft into a new instance, so the
+// worlds, mods and settings already there are ready to play, and copies the
+// game files the official launcher downloaded into the store, so nothing is
+// downloaded twice. .minecraft itself is only read.
+func (c *Controller) doImport(ctx context.Context, id TaskID, a ActionImport) {
+	name := a.Name
 	if name == "" {
 		name = instance.DefaultInstanceName
 	}
-	c.beginTask(id, TaskAdopt, "Adopting your .minecraft as "+name)
+	dir := filepath.Base(c.Manager.MinecraftPath)
+	c.beginTask(id, TaskImport, "Importing your "+dir+" as "+name)
 	c.emit(Event{Apply: func(s *Store) {
-		s.UpdateTask(id, func(t *Task) { t.Phase = "Moving " + filepath.Base(c.Manager.MinecraftPath) })
+		s.UpdateTask(id, func(t *Task) { t.Phase = "Copying your " + dir })
 	}})
 
-	res, err := c.Manager.AdoptMinecraft(name)
+	res, err := c.Manager.ImportMinecraft(instance.ImportOptions{
+		Name:               name,
+		IncludeSaves:       a.IncludeSaves,
+		IncludeScreenshots: a.IncludeScreenshots,
+		Ctx:                ctx,
+		Progress: func(copied, total int64, current string) {
+			c.emit(Event{Apply: func(s *Store) {
+				s.UpdateTask(id, func(t *Task) {
+					t.Progress = download.Progress{BytesDone: copied, BytesTotal: total, Current: current}
+				})
+			}})
+		},
+	})
 	if err != nil {
 		c.finishTask(id, err)
 		return
 	}
 
 	c.emit(Event{Apply: func(s *Store) {
-		s.UpdateTask(id, func(t *Task) { t.Phase = "Sharing its game files" })
+		s.UpdateTask(id, func(t *Task) {
+			t.Steps = append(t.Steps, t.Phase)
+			t.Phase = "Copying the game files"
+			t.Progress = download.Progress{}
+		})
 	}})
-	stats, err := launch.Harvest(ctx, c.Layout, res.Path, func(p launch.HarvestProgress) {
-		c.emit(Event{Apply: func(s *Store) {
-			s.UpdateTask(id, func(t *Task) {
-				t.Message = fmt.Sprintf("%d files, %s", p.Files, launch.FormatBytes(p.Bytes))
-			})
-		}})
-	})
-	if err != nil {
-		// The instance stands; only the sharing is missing, and the
-		// storage panel can do that later.
-		c.finishTask(id, fmt.Errorf("%s is adopted, but sharing its files failed: %w", name, err))
-	} else {
-		c.finishTask(id, nil)
-	}
+	stats, err := launch.HarvestWith(ctx, c.Layout, c.Manager.MinecraftPath, launch.HarvestOptions{Copy: true},
+		func(p launch.HarvestProgress) {
+			c.emit(Event{Apply: func(s *Store) {
+				s.UpdateTask(id, func(t *Task) {
+					t.Message = fmt.Sprintf("%d files, %s", p.Files, launch.FormatBytes(p.Bytes))
+				})
+			}})
+		})
 
-	status := fmt.Sprintf("Your %s is now the instance %s", filepath.Base(c.Manager.MinecraftPath), name)
+	c.doRefresh(ctx)
+	c.doSelect(name)
+	if err != nil {
+		// The instance stands; whatever the store lacks is downloaded at
+		// the first launch instead.
+		c.finishTask(id, fmt.Errorf("%s is imported, but copying the game files failed: %w", name, err))
+		return
+	}
+	c.finishTask(id, nil)
+
+	status := fmt.Sprintf("Imported your %s as %s", dir, name)
 	switch {
 	case res.Detected:
 		status += fmt.Sprintf(" · %s %s", res.Meta.MinecraftVersion, res.Meta.Loader)
 	default:
 		status += " · open Settings to say what it runs"
 	}
-	if err == nil && stats.BytesShared > 0 {
-		status += " · " + launch.FormatBytes(stats.BytesShared) + " shared"
+	if stats.BytesShared > 0 {
+		status += " · " + launch.FormatBytes(stats.BytesShared) + " of game files copied"
 	}
 	c.setStatus(status)
-	c.doRefresh(ctx)
-	c.doSelect(name)
 }
 
 // doRefresh reloads everything the window shows. It publishes in two steps:
@@ -461,9 +469,13 @@ func (c *Controller) doRefresh(ctx context.Context) {
 
 	accounts, active := c.Accounts.List()
 	config := c.Manager.GetConfig()
+	last := c.Manager.LastInstance()
+	canImport := c.Manager.CanImport() == nil
 
 	c.emit(Event{Terminal: true, Apply: func(s *Store) {
 		s.SetInstances(instances)
+		s.SetLastInstance(last)
+		s.SetCanImport(canImport)
 		s.SetAccounts(accounts, active)
 		s.SetConfig(config)
 		s.SetMSAConfigured(c.MSAConfigured())
@@ -473,6 +485,16 @@ func (c *Controller) doRefresh(ctx context.Context) {
 			s.SetScreen(ScreenLogin)
 		}
 	}})
+
+	if !c.legacyReported.Swap(true) {
+		switch {
+		case c.Manager.LegacyErr != nil:
+			c.fail(c.Manager.LegacyErr)
+		case c.Manager.LegacyReleased:
+			c.setStatus("Your " + filepath.Base(c.Manager.MinecraftPath) +
+				" is a plain folder again · instances now run in their own folders, without a link")
+		}
+	}
 
 	c.refreshStats()
 
@@ -500,12 +522,27 @@ func (c *Controller) doSelect(name string) {
 	meta, err := c.Manager.GetMeta(name)
 	ok := err == nil
 	installed := c.profileInstalled(meta)
+	c.remember(name)
 	c.emit(Event{Terminal: true, Apply: func(s *Store) {
 		s.SetSelected(name)
 		s.SetEditing(meta, ok)
 		s.SetProfileInstalled(installed)
 	}})
 	c.doLoadContent(name)
+}
+
+// remember keeps name as the instance picked last, for the start screen of
+// this and every later session. Going back to the start screen selects
+// nothing and so forgets nothing.
+func (c *Controller) remember(name string) {
+	if name == "" {
+		return
+	}
+	if err := c.Manager.SetLastInstance(name); err != nil {
+		// Only the start screen's suggestion is lost; not worth an error.
+		return
+	}
+	c.emit(Event{Terminal: true, Apply: func(s *Store) { s.SetLastInstance(name) }})
 }
 
 // profileInstalled reports whether an instance's version is in the store.
@@ -768,6 +805,10 @@ func (c *Controller) refreshInstances() {
 }
 
 func (c *Controller) doRename(ctx context.Context, a ActionRename) {
+	if g := c.store.Snapshot().Game; g.Running && g.Instance == a.Name {
+		c.fail(fmt.Errorf("%s is running; stop the game before renaming it", a.Name))
+		return
+	}
 	if err := c.Manager.RenameInstance(a.Name, a.NewName); err != nil {
 		c.fail(err)
 		return
@@ -822,12 +863,39 @@ func (c *Controller) doLoginOffline(name string) {
 }
 
 // MSAConfigured reports whether Microsoft sign-in can be offered.
-func (c *Controller) MSAConfigured() bool { return c.MSAClientID != "" }
+func (c *Controller) MSAConfigured() bool { return c.msaClientID() != "" }
+
+// msaClientID is the application id sign-in runs against right now.
+func (c *Controller) msaClientID() string {
+	if id := c.msaOverride.Load(); id != nil {
+		return *id
+	}
+	return c.MSAClientID
+}
+
+// ResolveMSAClientID picks the Azure application id to sign in with.
+//
+// The environment wins so a player can try a different registration without a
+// rebuild, then the saved configuration, then whatever the build was stamped
+// with.
+func ResolveMSAClientID(builtIn, configured string) string {
+	// The old variable name still works: it was the launcher's own before
+	// the rename, and breaking a shell profile over that would be rude.
+	for _, key := range []string{"INSTANT_LAUNCHER_MSA_CLIENT_ID", "MIM_MSA_CLIENT_ID"} {
+		if id := strings.TrimSpace(os.Getenv(key)); id != "" {
+			return id
+		}
+	}
+	if id := strings.TrimSpace(configured); id != "" {
+		return id
+	}
+	return strings.TrimSpace(builtIn)
+}
 
 // msaSilent builds a sign-in client that reports nothing, for work the
 // player did not ask for and should not have to watch.
 func (c *Controller) msaSilent() *auth.MSA {
-	client := auth.NewMSA(c.MSAClientID)
+	client := auth.NewMSA(c.msaClientID())
 	if c.MSAEndpoints.Token != "" {
 		client.Endpoints = c.MSAEndpoints
 	}
@@ -1087,9 +1155,18 @@ func (c *Controller) doCreate(ctx context.Context, id TaskID, a ActionCreate) {
 }
 
 func (c *Controller) doDelete(ctx context.Context, name string) {
+	// The game holds its files open and writes into its directory until it
+	// exits.
+	if g := c.store.Snapshot().Game; g.Running && g.Instance == name {
+		c.fail(fmt.Errorf("%s is running; stop the game before deleting it", name))
+		return
+	}
 	if err := c.Manager.DeleteInstance(name); err != nil {
 		c.fail(err)
 		return
+	}
+	if c.Manager.LastInstance() == "" {
+		_ = c.Manager.SetLastInstance("")
 	}
 	c.emit(Event{Terminal: true, Apply: func(s *Store) {
 		if s.Snapshot().Selected == name {
@@ -1139,6 +1216,11 @@ func (c *Controller) doSetConfig(ctx context.Context, a ActionSetConfig) {
 	if err := c.Manager.UpdateConfig(a.Key, a.Value); err != nil {
 		c.fail(err)
 		return
+	}
+	// A new application id is used from now on, not from the next start.
+	if a.Key == "msa-client-id" {
+		id := ResolveMSAClientID(c.BuiltInMSAClientID, c.Manager.GetConfig()["msa-client-id"])
+		c.msaOverride.Store(&id)
 	}
 	c.doRefresh(ctx)
 }
@@ -1277,13 +1359,12 @@ func (c *Controller) doLaunch(ctx context.Context, id TaskID, name string) {
 		return
 	}
 
-	// gameDir is the ~/.minecraft symlink, so the instance has to be active.
-	if c.Manager.GetActiveInstance() != name {
-		c.step(id, "Activating "+name)
-		if err := c.Manager.SwitchInstance(name); err != nil {
-			c.finishTask(id, err)
-			return
-		}
+	// The game runs in the instance's own directory; the official
+	// launcher's .minecraft plays no part.
+	gameDir, err := c.Manager.InstancePath(name)
+	if err != nil {
+		c.finishTask(id, err)
+		return
 	}
 
 	d := download.New()
@@ -1331,7 +1412,7 @@ func (c *Controller) doLaunch(ctx context.Context, id TaskID, name string) {
 			UserType:    account.UserType(),
 			ClientID:    c.LauncherID,
 		},
-		GameDir:       c.Manager.MinecraftPath,
+		GameDir:       gameDir,
 		LauncherName:  "instant-launcher",
 		LauncherVer:   c.Version,
 		MinMB:         minMB,
@@ -1345,7 +1426,7 @@ func (c *Controller) doLaunch(ctx context.Context, id TaskID, name string) {
 	proc, err := launch.Start(context.Background(), launch.Spec{
 		JavaPath: selection.Runtime.Path,
 		Args:     args,
-		GameDir:  c.Manager.MinecraftPath,
+		GameDir:  gameDir,
 		LogDir:   filepath.Join(c.Manager.AppDir, "logs"),
 		Name:     name,
 	})
@@ -1353,6 +1434,7 @@ func (c *Controller) doLaunch(ctx context.Context, id TaskID, name string) {
 		c.finishTask(id, err)
 		return
 	}
+	c.remember(name)
 
 	c.mu.Lock()
 	c.game = proc

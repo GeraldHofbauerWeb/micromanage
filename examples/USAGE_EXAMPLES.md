@@ -2,7 +2,25 @@
 
 This document provides practical examples for common use cases of Instant Launcher.
 
+Every instance is a folder of its own under the instances directory
+(`instant-mc config instances-path` shows where), and the game runs in it
+directly. There is nothing to switch: launch the instance you want. The
+official launcher's `.minecraft` is only ever read, to import it.
+
 ## 🎮 Gaming Scenarios
+
+### Bringing your existing Minecraft along
+
+```bash
+# Copy the official launcher's .minecraft into an instance called Default
+instant-mc import
+
+# Or under another name, without the worlds
+instant-mc import vanilla-survival --no-saves
+
+# Play it
+instant-mc launch Default
+```
 
 ### Multiple Modpacks
 
@@ -17,10 +35,10 @@ cp SkyFactory-mods/* ~/.minecraft-instances/skyfactory/mods/
 cp StoneBlock-mods/* ~/.minecraft-instances/stoneblock/mods/
 cp Enigmatica-mods/* ~/.minecraft-instances/enigmatica/mods/
 
-# Switch between them
-instant-mc switch skyfactory
+# Play whichever you like
+instant-mc launch skyfactory
 # Play Sky Factory...
-instant-mc switch stoneblock
+instant-mc launch stoneblock
 # Play Stone Block...
 ```
 
@@ -32,8 +50,8 @@ instant-mc create mc-1.19.4-forge
 instant-mc create mc-1.20.1-forge
 instant-mc create mc-1.21-neoforge
 
-# Switch based on what you want to play
-instant-mc switch mc-1.20.1-forge
+# Launch based on what you want to play
+instant-mc launch mc-1.20.1-forge
 ```
 
 ## 🔧 Development Scenarios
@@ -47,13 +65,13 @@ instant-mc create compatibility-test # With common mods
 instant-mc create performance-test   # With performance mods
 
 # Development cycle
-instant-mc switch clean-testing
+instant-mc launch clean-testing
 # Test your mod in isolation
 
-instant-mc switch compatibility-test  
+instant-mc launch compatibility-test
 # Test with other popular mods
 
-instant-mc switch performance-test
+instant-mc launch performance-test
 # Check performance impact
 ```
 
@@ -78,21 +96,22 @@ cp my-mod-1.21.jar ~/.minecraft-instances/dev-1.21/mods/
 ```bash
 # Create base modpack
 instant-mc create my-modpack-base
-instant-mc switch my-modpack-base
 
 # Add mods incrementally and test
-cp essential-mods/* ~/.minecraft/mods/
+cp essential-mods/* ~/.minecraft-instances/my-modpack-base/mods/
+instant-mc launch my-modpack-base
 # Test stability...
 
-cp optional-mods/* ~/.minecraft/mods/
+cp optional-mods/* ~/.minecraft-instances/my-modpack-base/mods/
+instant-mc launch my-modpack-base
 # Test compatibility...
 
-# Create variants
-instant-mc create my-modpack-lite
-instant-mc create my-modpack-full
+# Create variants from it
+instant-mc create my-modpack-lite --clone my-modpack-base
+instant-mc create my-modpack-full --clone my-modpack-base
 
 # Distribute the lite version
-tar -czf my-modpack-lite.tar.gz ~/.minecraft-instances/my-modpack-lite/
+tar -czf my-modpack-lite.tar.gz -C ~/.minecraft-instances my-modpack-lite
 ```
 
 ### A/B Testing
@@ -103,10 +122,10 @@ instant-mc create config-a
 instant-mc create config-b
 
 # Test different mod configurations
-instant-mc switch config-a
+instant-mc launch config-a
 # Configure mods one way...
 
-instant-mc switch config-b  
+instant-mc launch config-b
 # Configure mods differently...
 
 # Compare performance/stability
@@ -117,18 +136,15 @@ instant-mc switch config-b
 ### Backup Strategy
 
 ```bash
-# Before major changes, create backup
-instant-mc create modpack-backup-$(date +%Y%m%d)
-
-# Copy current instance  
-cp -r ~/.minecraft-instances/my-modpack ~/.minecraft-instances/modpack-backup-$(date +%Y%m%d)/
+# Before major changes, make a copy (worlds included)
+instant-mc create modpack-backup-$(date +%Y%m%d) --clone my-modpack --with-saves --with-screenshots
 
 # Make changes safely
-instant-mc switch my-modpack
+instant-mc launch my-modpack
 # Add experimental mods...
 
-# If issues occur, restore backup
-instant-mc switch modpack-backup-$(date +%Y%m%d)
+# If issues occur, play the backup
+instant-mc launch modpack-backup-$(date +%Y%m%d)
 ```
 
 ### Sharing with Friends
@@ -136,18 +152,13 @@ instant-mc switch modpack-backup-$(date +%Y%m%d)
 ```bash
 # Prepare instance for sharing
 instant-mc create friend-modpack
-instant-mc switch friend-modpack
-
-# Add mods and configure
-# Clean up personal data (remove saves, etc.)
-rm -rf ~/.minecraft/saves/*
+# Add mods and configure; worlds stay out of a clone unless asked for
 
 # Package for sharing
-cd ~/.minecraft-instances/
-tar -czf friend-modpack.tar.gz friend-modpack/
+tar -czf friend-modpack.tar.gz -C ~/.minecraft-instances friend-modpack
 
 # Send friend-modpack.tar.gz to friends
-# They extract to ~/.minecraft-instances/ and switch to it
+# They extract it into their instances directory and launch it
 ```
 
 ### Server Sync
@@ -155,15 +166,13 @@ tar -czf friend-modpack.tar.gz friend-modpack/
 ```bash
 # Sync with server modpack
 instant-mc create server-sync
-instant-mc switch server-sync
 
 # Download server mods
 wget server.com/modpack-mods.zip
-unzip modpack-mods.zip -d ~/.minecraft/mods/
+unzip modpack-mods.zip -d ~/.minecraft-instances/server-sync/mods/
 
-# Keep in sync
-instant-mc switch server-sync
-# Update mods as server updates...
+# Play
+instant-mc launch server-sync --server play.example.com
 ```
 
 ## 🛠️ Maintenance
@@ -174,14 +183,8 @@ instant-mc switch server-sync
 # List all instances to see what you have
 instant-mc list
 
-# Switch to temporary instance before cleanup
-instant-mc switch vanilla
-
-# Remove unused instances
-rm -rf ~/.minecraft-instances/old-instance-name
-
-# Restore if needed
-instant-mc restore
+# Remove unused instances (asks first)
+instant-mc delete old-instance-name
 ```
 
 ### Regular Backups
@@ -204,11 +207,8 @@ ls -t ~/minecraft-backups/ | tail -n +5 | xargs -d '\n' -r rm -rf --
 
 ### Quick Instance Info
 ```bash
-# See mod counts
+# See mod counts, and which instance was used last
 instant-mc list
-
-# Check current instance
-instant-mc list | grep "Current instance"
 ```
 
 ### Scripted Workflows
@@ -222,23 +222,23 @@ echo "Building mod..."
 echo "Updating test instance..."
 cp build/libs/*.jar ~/.minecraft-instances/dev-test/mods/
 
-echo "Switching to test instance..."
-instant-mc switch dev-test
-
-echo "Ready for testing!"
+echo "Launching the test instance..."
+instant-mc launch dev-test --wait
 ```
 
 ### Safe Experimentation
 ```bash
 # Always work on copies when experimenting
-cp -r ~/.minecraft-instances/stable ~/.minecraft-instances/experimental
-instant-mc switch experimental
+instant-mc create experimental --clone stable --with-saves
+instant-mc launch experimental
 # Experiment safely...
 
-# Restore stable if needed
-instant-mc switch stable
+# The stable one is untouched
+instant-mc launch stable
 ```
 
 ---
 
-**Remember**: The instance manager uses symlinks, so switching is instant and safe. Always keep backups of important configurations!
+**Remember**: instances sit side by side and never touch each other or the
+official launcher's `.minecraft`. Always keep backups of important
+configurations!

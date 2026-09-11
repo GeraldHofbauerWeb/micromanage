@@ -34,6 +34,15 @@ type HarvestProgress struct {
 // Everything else is user data and is never touched.
 var harvestDirs = []string{"libraries", "versions", "assets", "runtime"}
 
+// HarvestOptions tunes a harvest.
+type HarvestOptions struct {
+	// Copy writes real copies instead of hard links. A directory the launcher
+	// does not own — the official launcher's .minecraft — must not share its
+	// files' storage with the store, or a change on either side would show
+	// on the other.
+	Copy bool
+}
+
 // Harvest copies the shareable content of an instance into the store.
 //
 // It is deliberately additive: files are hard-linked where the filesystem
@@ -45,6 +54,11 @@ var harvestDirs = []string{"libraries", "versions", "assets", "runtime"}
 // loader installer at all: its version profile and processed libraries are
 // already on disk.
 func Harvest(ctx context.Context, layout *Layout, instanceDir string, progress func(HarvestProgress)) (HarvestStats, error) {
+	return HarvestWith(ctx, layout, instanceDir, HarvestOptions{}, progress)
+}
+
+// HarvestWith is Harvest with options.
+func HarvestWith(ctx context.Context, layout *Layout, instanceDir string, opts HarvestOptions, progress func(HarvestProgress)) (HarvestStats, error) {
 	var stats HarvestStats
 	var files, bytes atomic.Int64
 
@@ -101,7 +115,7 @@ func Harvest(ctx context.Context, layout *Layout, instanceDir string, progress f
 
 			// A hard link shares the data outright; it only works within one
 			// filesystem, so copying is the fallback.
-			if err := os.Link(path, target); err == nil {
+			if !opts.Copy && os.Link(path, target) == nil {
 				stats.FilesLinked++
 			} else if err := copyPreservingMode(path, target, info.Mode().Perm()); err != nil {
 				stats.Errors = append(stats.Errors, fmt.Sprintf("%s: %v", rel, err))

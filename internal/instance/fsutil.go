@@ -228,8 +228,7 @@ func (c *ctxReader) Read(p []byte) (int, error) {
 }
 
 // cloneSource resolves the directory a new instance should be populated from,
-// or "" when an empty skeleton was requested. A .minecraft that is a symlink is
-// followed, so cloning copies the instance it points at rather than failing.
+// or "" when an empty skeleton was requested.
 func (m *Manager) cloneSource(o CreateOptions) (string, error) {
 	switch {
 	case o.CloneFrom != "":
@@ -248,12 +247,11 @@ func (m *Manager) cloneSource(o CreateOptions) (string, error) {
 			// Nothing to clone from is not an error; the skeleton stands alone.
 			return "", nil
 		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			target, err := os.Readlink(m.MinecraftPath)
-			if err != nil {
-				return "", fmt.Errorf("cannot resolve %s: %w", m.MinecraftPath, err)
-			}
-			return target, nil
+		// A link here would be one into an instance, the way versions before
+		// 2 left it; copying through it would duplicate that instance under
+		// the official launcher's name.
+		if isLinkInfo(m.MinecraftPath, info) {
+			return "", fmt.Errorf("%s is a link, not a directory to copy", m.MinecraftPath)
 		}
 		return m.MinecraftPath, nil
 	}

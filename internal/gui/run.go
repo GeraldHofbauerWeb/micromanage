@@ -38,7 +38,8 @@ type Options struct {
 	Version    string
 	LauncherID string
 	// MSAClientID is the Azure application id Microsoft sign-in runs against.
-	// It is resolved at startup from, in order, the INSTANT_LAUNCHER_MSA_CLIENT_ID
+	// It is resolved at startup, and again whenever it is changed in
+	// Settings, from, in order, the INSTANT_LAUNCHER_MSA_CLIENT_ID
 	// environment variable, the manager configuration, and the id compiled
 	// into the build — so a fork or a test build needs no recompile.
 	MSAClientID string
@@ -59,7 +60,8 @@ func Run(opts Options) error {
 	store := launcher.NewStore()
 	ctrl := launcher.NewController(manager, store, accounts, opts.Version)
 	ctrl.LauncherID = opts.LauncherID
-	ctrl.MSAClientID = resolveMSAClientID(opts.MSAClientID, manager)
+	ctrl.BuiltInMSAClientID = opts.MSAClientID
+	ctrl.MSAClientID = launcher.ResolveMSAClientID(opts.MSAClientID, manager.GetConfig()["msa-client-id"])
 	store.SetMSAConfigured(ctrl.MSAConfigured())
 
 	// The desktop matches a window to its .desktop file by this id — the
@@ -91,25 +93,6 @@ func Run(opts Options) error {
 			e.Frame(gtx.Ops)
 		}
 	}
-}
-
-// resolveMSAClientID picks the Azure application id to sign in with.
-//
-// The environment wins so a player can try a different registration without a
-// rebuild, then the saved configuration, then whatever the build was stamped
-// with.
-func resolveMSAClientID(compiledIn string, manager *instance.Manager) string {
-	// The old variable name still works: it was the launcher's own before
-	// the rename, and breaking a shell profile over that would be rude.
-	for _, key := range []string{"INSTANT_LAUNCHER_MSA_CLIENT_ID", "MIM_MSA_CLIENT_ID"} {
-		if id := strings.TrimSpace(os.Getenv(key)); id != "" {
-			return id
-		}
-	}
-	if id := strings.TrimSpace(manager.GetConfig()["msa-client-id"]); id != "" {
-		return id
-	}
-	return strings.TrimSpace(compiledIn)
 }
 
 // pump drains controller events into the store and coalesces repaints.

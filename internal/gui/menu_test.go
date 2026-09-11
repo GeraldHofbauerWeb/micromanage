@@ -48,7 +48,7 @@ func TestRightClickOpensTheInstanceMenu(t *testing.T) {
 		HasAccount: true,
 		Instances: []instance.Instance{
 			{Name: "alpha", Path: "/tmp/alpha", Configured: true, MinecraftVersion: "1.21.1"},
-			{Name: "beta", Path: "/tmp/beta", Configured: true, MinecraftVersion: "1.21.1", IsActive: true},
+			{Name: "beta", Path: "/tmp/beta", Configured: true, MinecraftVersion: "1.21.1"},
 		},
 	}
 	u := newUI(nil)
@@ -76,8 +76,10 @@ func TestRightClickOpensTheInstanceMenu(t *testing.T) {
 	if len(u.menu.items) < 2 || u.menu.items[0].label != "Play" || u.menu.items[0].do == nil {
 		t.Errorf("first item = %+v, want an enabled Play", u.menu.items)
 	}
-	if item := u.menu.items[1]; item.label != "Set active" || item.do == nil {
-		t.Errorf("second item = %+v, want an enabled Set active", item)
+	for _, item := range u.menu.items {
+		if item.label == "Set active" {
+			t.Errorf("the menu still offers %q; instances run in their own folders now", item.label)
+		}
 	}
 	last := u.menu.items[len(u.menu.items)-1]
 	if last.label != "Delete…" || last.do == nil {
@@ -105,7 +107,7 @@ func TestRightClickOpensTheInstanceMenu(t *testing.T) {
 		t.Fatalf("no click on the panel reached the Settings item (%d items ran)", ran)
 	}
 	if ran < 2 {
-		t.Errorf("only %d items ran before Settings; Play and Set active come first", ran)
+		t.Errorf("only %d items ran before Settings; Play and Overview come first", ran)
 	}
 	if u.menu.open {
 		t.Error("the menu stayed open after an item ran")
@@ -124,14 +126,17 @@ func TestRightClickOpensTheInstanceMenu(t *testing.T) {
 		t.Error("a click outside the menu left it open")
 	}
 
-	// The active instance cannot be deleted; its item says so.
+	// A running instance cannot be deleted; its item says so, and Play
+	// becomes Stop.
+	running := snap
+	running.Game = launcher.GameState{Instance: "beta", Running: true}
 	u.pointer = image.Pt(10, 10)
-	u.openInstanceMenu(snap, snap.Instances[1])
+	u.openInstanceMenu(running, running.Instances[1])
 	last = u.menu.items[len(u.menu.items)-1]
-	if last.do != nil || last.note != "active" {
-		t.Errorf("delete item for the active instance = %+v", last)
+	if last.do != nil || last.note != "running" {
+		t.Errorf("delete item for the running instance = %+v", last)
 	}
-	if item := u.menu.items[1]; item.do != nil || item.note == "" {
-		t.Errorf("set active for the active instance = %+v, want inert with a note", item)
+	if item := u.menu.items[0]; item.label != "Stop game" || item.do == nil {
+		t.Errorf("first item for the running instance = %+v, want Stop game", item)
 	}
 }

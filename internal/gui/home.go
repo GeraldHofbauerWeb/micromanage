@@ -108,7 +108,7 @@ func (r *railState) Layout(gtx layout.Context, u *ui, snap launcher.Snapshot) la
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			if len(snap.Instances) == 0 {
 				return layout.UniformInset(sp3).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return th.wrapped(gtx, "No instances yet. Press + to make one.", th.P.TextDim)
+					return th.wrapped(gtx, "No instances yet. Import your Minecraft or press + to make one.", th.P.TextDim)
 				})
 			}
 			return th.list(gtx, r.list, len(snap.Instances), func(gtx layout.Context, i int) layout.Dimensions {
@@ -159,11 +159,8 @@ func (r *railState) layoutRow(gtx layout.Context, u *ui, snap launcher.Snapshot,
 					)
 				}),
 				rigid(func(gtx layout.Context) layout.Dimensions {
-					switch {
-					case running:
+					if running {
 						return dot(gtx, th.P.Torch, unit.Dp(8))
-					case inst.IsActive:
-						return dot(gtx, th.P.Good, unit.Dp(6))
 					}
 					return layout.Dimensions{}
 				}),
@@ -221,23 +218,16 @@ func (u *ui) instanceMenu(snap launcher.Snapshot, inst instance.Instance) []menu
 		}
 	}
 
-	setActive := menuItem{label: "Set active", icon: u.ic.Check}
-	if inst.IsActive {
-		setActive.note = "is active"
-	} else {
-		setActive.do = func() { u.dispatch(launcher.ActionSetActive{Name: name}) }
-	}
-
+	// A running game has its directory open; it goes once the game is shut.
 	del := menuItem{label: "Delete…", icon: u.ic.Delete, danger: true, divider: true}
-	if inst.IsActive {
-		del.note = "active"
+	if running {
+		del.note = "running"
 	} else {
 		del.do = func() { u.dialogs.openDelete(inst) }
 	}
 
 	return []menuItem{
 		play,
-		setActive,
 		{label: "Overview", icon: u.ic.Info, divider: true, do: openTab(0)},
 		{label: "Settings", icon: u.ic.Settings, do: openTab(settingsTab)},
 		{label: "Instance folder", icon: u.ic.Folder, do: func() { u.dispatch(launcher.ActionOpen{Path: inst.Path}) }},
@@ -296,10 +286,12 @@ type workbench struct {
 	tabs   []widget.Clickable
 	tabRow widget.List
 
-	play, stop, cancel, folder, newFirst widget.Clickable
-	// playActive and stopActive are the start screen's buttons for the
-	// active instance, before anything is selected.
-	playActive, stopActive widget.Clickable
+	play, stop, cancel, folder widget.Clickable
+	// playLast and stopLast are the start screen's buttons for the instance
+	// picked last, before anything is selected.
+	playLast, stopLast widget.Clickable
+	// wizard is the start screen before there is any instance.
+	wizard wizard
 
 	content  map[instance.ContentKind]*kindState
 	settings instanceSettings
@@ -319,6 +311,7 @@ func newWorkbench() workbench {
 		content:  map[instance.ContentKind]*kindState{},
 		settings: newInstanceSettings(),
 		overview: newOverview(),
+		wizard:   newWizard(),
 	}
 	for _, k := range instance.ContentKinds() {
 		w.content[k] = &kindState{list: newList(), filter: newEditor()}
@@ -375,20 +368,18 @@ func (w *workbench) Layout(gtx layout.Context, u *ui, snap launcher.Snapshot) la
 }
 
 // layoutEmpty is the workbench with nothing on it: the mark, the name, and
-// the one thing to do next. It is the first thing a new player sees and
-// the resting state between instances, so it is the icon at a size where
-// its three blocks read as what they are, and little else.
+// the one thing to do next. It is the first thing a new player sees — the
+// wizard that makes the first instance — and the resting state between
+// instances, so it is the icon at a size where its three blocks read as what
+// they are, and little else.
 func (w *workbench) layoutEmpty(gtx layout.Context, u *ui, snap launcher.Snapshot) layout.Dimensions {
 	th := u.th
-	if w.newFirst.Clicked(gtx) {
-		u.dialogs.openCreate(snap, "")
-	}
-	adopting := taskActive(snap.Task) && snap.Task.Kind == launcher.TaskAdopt
+	first := len(snap.Instances) == 0 || importing(snap)
 
 	// The summary only appears when there is room under the hero for it,
 	// and its chart only when there is room for that too: a short window
 	// keeps the icon and the one button instead.
-	showStats := snap.Stats.Played() && len(snap.Instances) > 0 && gtx.Constraints.Max.Y >= gtx.Dp(unit.Dp(540))
+	showStats := snap.Stats.Played() && !first && gtx.Constraints.Max.Y >= gtx.Dp(unit.Dp(540))
 	compactStats := gtx.Constraints.Max.Y < gtx.Dp(unit.Dp(640))
 	// With the summary under it the hero gives up some of its air; on its
 	// own it keeps the mark at the size the icon was drawn for.
@@ -397,19 +388,21 @@ func (w *workbench) layoutEmpty(gtx layout.Context, u *ui, snap launcher.Snapsho
 		markSize, heroGap = unit.Dp(96), sp3
 	}
 
-	var active instance.Instance
+	// The instance picked last, in this session or an earlier one, is the
+	// one the start screen offers to play.
+	var last instance.Instance
 	for _, inst := range snap.Instances {
-		if inst.IsActive {
-			active = inst
+		if inst.Name == snap.LastInstance {
+			last = inst
 		}
 	}
-	running := snap.Game.Running && active.Name != "" && snap.Game.Instance == active.Name
-	if w.playActive.Clicked(gtx) {
+	running := snap.Game.Running && last.Name != "" && snap.Game.Instance == last.Name
+	if w.playLast.Clicked(gtx) {
 		// Selecting it first puts the launch's progress on the workbench.
-		u.dispatch(launcher.ActionSelect{Name: active.Name})
-		u.dispatch(launcher.ActionLaunch{Name: active.Name})
+		u.dispatch(launcher.ActionSelect{Name: last.Name})
+		u.dispatch(launcher.ActionLaunch{Name: last.Name})
 	}
-	if w.stopActive.Clicked(gtx) {
+	if w.stopLast.Clicked(gtx) {
 		u.dispatch(launcher.ActionStopGame{})
 	}
 
@@ -426,48 +419,41 @@ func (w *workbench) layoutEmpty(gtx layout.Context, u *ui, snap launcher.Snapsho
 			}),
 			spacer(sp2),
 			rigid(func(gtx layout.Context) layout.Dimensions {
-				switch {
-				case adopting:
-					return th.mid(gtx, "Moving your .minecraft in as the first instance…")
-				case len(snap.Instances) == 0:
-					return th.mid(gtx, "Make your first instance to get started.")
+				if first {
+					return th.mid(gtx, w.wizard.headline(snap))
 				}
-				if active.Name != "" && active.Configured && snap.HasAccount && !running {
-					return th.mid(gtx, "Pick an instance on the left, or play "+active.Name+".")
+				if last.Name != "" && last.Configured && snap.HasAccount && !running {
+					return th.mid(gtx, "Pick an instance on the left, or play "+last.Name+".")
 				}
 				return th.mid(gtx, "Pick an instance on the left.")
 			}),
 			spacer(heroGap),
 			rigid(func(gtx layout.Context) layout.Dimensions {
-				// The one thing to do next: make an instance, or play the
-				// active one — the same instance the official launcher
-				// would start.
+				// The one thing to do next: make the first instance, or play
+				// the one picked last.
 				switch {
-				case adopting:
-					gtx.Constraints.Max.X = gtx.Dp(unit.Dp(220))
-					return th.progress(gtx, taskFraction(snap.Task), unit.Dp(3))
-				case len(snap.Instances) == 0:
-					return th.primary(gtx, &w.newFirst, u.ic.Add, "New instance")
+				case first:
+					return w.wizard.Layout(gtx, u, snap)
 				case running:
-					return th.secondary(gtx, &w.stopActive, "Stop "+active.Name)
-				case active.Name == "" || !active.Configured:
+					return th.secondary(gtx, &w.stopLast, "Stop "+last.Name)
+				case last.Name == "" || !last.Configured:
 					return layout.Dimensions{}
 				case !snap.HasAccount:
-					return th.smallIn(gtx, "Sign in to play "+active.Name, th.P.TextDim)
+					return th.smallIn(gtx, "Sign in to play "+last.Name, th.P.TextDim)
 				}
-				return th.primary(gtx, &w.playActive, u.ic.Play, "Play "+active.Name)
+				return th.primary(gtx, &w.playLast, u.ic.Play, "Play "+last.Name)
 			}),
 			spacer(sp3),
 			rigid(func(gtx layout.Context) layout.Dimensions {
-				if len(snap.Instances) == 0 {
+				if first {
 					return layout.Dimensions{}
 				}
 				line := fmt.Sprintf("%d instances", len(snap.Instances))
 				switch {
 				case running:
-					line += " · " + active.Name + " is running"
-				case active.Name != "":
-					line += " · " + active.Name + " is active"
+					line += " · " + last.Name + " is running"
+				case last.Name != "":
+					line += " · last used " + last.Name
 				}
 				return th.monoIn(gtx, line, th.P.TextDim)
 			}),
@@ -504,11 +490,8 @@ func (w *workbench) layoutHeader(gtx layout.Context, u *ui, snap launcher.Snapsh
 						return row(gtx, sp2,
 							rigid(func(gtx layout.Context) layout.Dimensions { return th.display(gtx, inst.Name) }),
 							rigid(func(gtx layout.Context) layout.Dimensions {
-								switch {
-								case running:
+								if running {
 									return th.chip(gtx, "running", th.P.Torch)
-								case inst.IsActive:
-									return th.chip(gtx, "active", th.P.Good)
 								}
 								return layout.Dimensions{}
 							}),
@@ -557,7 +540,8 @@ func (w *workbench) layoutActivity(gtx layout.Context, u *ui, snap launcher.Snap
 
 	switch {
 	case taskActive(snap.Task) && (snap.Task.Kind == launcher.TaskLaunch ||
-		snap.Task.Kind == launcher.TaskInstall || snap.Task.Kind == launcher.TaskCreate):
+		snap.Task.Kind == launcher.TaskInstall || snap.Task.Kind == launcher.TaskCreate ||
+		snap.Task.Kind == launcher.TaskImport):
 		return inset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			gtx.Constraints.Min.X = gtx.Constraints.Max.X
 			return column(gtx, unit.Dp(6),

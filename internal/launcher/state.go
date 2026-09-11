@@ -41,7 +41,7 @@ const (
 	TaskReclaim TaskKind = "reclaim"
 	TaskInstall TaskKind = "install"
 	TaskDetect  TaskKind = "detect"
-	TaskAdopt   TaskKind = "adopt"
+	TaskImport  TaskKind = "import"
 	TaskLogin   TaskKind = "login"
 )
 
@@ -103,6 +103,13 @@ type Snapshot struct {
 	Editing   instance.Meta
 	EditingOK bool
 
+	// LastInstance is the instance picked last, remembered across restarts,
+	// which the start screen offers to play.
+	LastInstance string
+	// CanImport reports whether the official launcher's .minecraft is there
+	// with something in it to import as an instance.
+	CanImport bool
+
 	// Content is what the selected instance holds, per kind, and ContentFor
 	// names the instance it was listed for so a stale listing is never shown
 	// against a newly selected one.
@@ -163,6 +170,8 @@ type Store struct {
 
 	instances        []instance.Instance
 	selected         string
+	lastInstance     string
+	canImport        bool
 	editing          instance.Meta
 	editingOK        bool
 	content          map[instance.ContentKind][]instance.Entry
@@ -213,6 +222,8 @@ func (s *Store) Snapshot() Snapshot {
 		Accounts:         append([]auth.Account(nil), s.accounts...),
 		Instances:        append([]instance.Instance(nil), s.instances...),
 		Selected:         s.selected,
+		LastInstance:     s.lastInstance,
+		CanImport:        s.canImport,
 		Editing:          s.editing,
 		EditingOK:        s.editingOK,
 		ContentFor:       s.contentFor,
@@ -294,6 +305,20 @@ func (s *Store) SetSelected(name string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.selected = name
+}
+
+// SetLastInstance publishes the instance picked last.
+func (s *Store) SetLastInstance(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lastInstance = name
+}
+
+// SetCanImport records whether .minecraft can be imported.
+func (s *Store) SetCanImport(ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.canImport = ok
 }
 
 // SetContent publishes the listing of one instance, replacing whatever was

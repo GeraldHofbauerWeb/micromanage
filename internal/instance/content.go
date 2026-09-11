@@ -377,9 +377,7 @@ func (m *Manager) contentPath(instanceName string, kind ContentKind, name string
 	return target, nil
 }
 
-// RenameInstance moves an instance to a new name. The active instance is
-// re-linked afterwards, so renaming what is currently playing is safe; the
-// game is only started through the link anyway.
+// RenameInstance moves an instance to a new name.
 func (m *Manager) RenameInstance(oldName, newName string) error {
 	oldPath, err := m.InstancePath(oldName)
 	if err != nil {
@@ -399,18 +397,8 @@ func (m *Manager) RenameInstance(oldName, newName string) error {
 		return fmt.Errorf("instance '%s' already exists", newName)
 	}
 
-	wasActive := m.GetActiveInstance() == oldName
 	if err := os.Rename(oldPath, newPath); err != nil {
 		return fmt.Errorf("renaming the instance: %w", err)
-	}
-
-	if wasActive {
-		if err := os.Remove(m.MinecraftPath); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("re-linking %s: %w", m.MinecraftPath, err)
-		}
-		if err := os.Symlink(newPath, m.MinecraftPath); err != nil {
-			return fmt.Errorf("re-linking %s: %w", m.MinecraftPath, err)
-		}
 	}
 
 	// The metadata carries the name too; LoadMeta treats the directory as

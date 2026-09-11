@@ -41,9 +41,9 @@ var launchCmd = &cobra.Command{
 	Short: "Launch an instance",
 	Long: `Launch an instance.
 
-The instance is activated first, so ~/.minecraft points at it and the game
-writes its saves, screenshots and logs there. Game content is taken from the
-shared store and downloaded if missing.`,
+The game runs in the instance's own directory and writes its saves,
+screenshots and logs there; the official launcher's .minecraft is not used.
+Game content is taken from the shared store and downloaded if missing.`,
 	Args:          cobra.ExactArgs(1),
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -55,6 +55,10 @@ shared store and downloaded if missing.`,
 			return err
 		}
 
+		gameDir, err := manager.InstancePath(name)
+		if err != nil {
+			return err
+		}
 		meta, err := manager.GetMeta(name)
 		if err != nil {
 			return err
@@ -71,17 +75,6 @@ shared store and downloaded if missing.`,
 		account, err := resolveAccount(cmd, manager, launchOffline)
 		if err != nil {
 			return err
-		}
-
-		// The game's gameDir is the ~/.minecraft symlink, so the instance has
-		// to be the active one before anything starts.
-		if manager.GetActiveInstance() != name {
-			fmt.Fprintf(os.Stderr, "  activating  %s\n", name)
-			if !launchDryRun {
-				if err := manager.SwitchInstance(name); err != nil {
-					return fmt.Errorf("activating %s: %w", name, err)
-				}
-			}
 		}
 
 		layout := launch.NewLayout(manager.AppDir)
@@ -119,7 +112,7 @@ shared store and downloaded if missing.`,
 				UserType:    account.UserType(),
 				ClientID:    msaClientID(manager),
 			},
-			GameDir:         manager.MinecraftPath,
+			GameDir:         gameDir,
 			LauncherName:    "instant-launcher",
 			LauncherVer:     Version,
 			MinMB:           minMB,
@@ -148,7 +141,7 @@ shared store and downloaded if missing.`,
 		proc, err := launch.Start(ctx, launch.Spec{
 			JavaPath: selection.Runtime.Path,
 			Args:     gameArgs,
-			GameDir:  manager.MinecraftPath,
+			GameDir:  gameDir,
 			LogDir:   filepath.Join(manager.AppDir, "logs"),
 			Name:     name,
 			OnLine:   lineEcho(launchWait),
@@ -156,6 +149,7 @@ shared store and downloaded if missing.`,
 		if err != nil {
 			return err
 		}
+		_ = manager.SetLastInstance(name)
 
 		fmt.Fprintf(os.Stderr, "\nMinecraft is running (pid %d)\n", proc.Cmd.Process.Pid)
 		if proc.LogPath != "" {

@@ -5,8 +5,8 @@
 # Instant Launcher
 
 A blazingly fast Minecraft launcher and instance manager. Keep several setups
-side by side, switch between them instantly, and launch them — sign-in,
-version, mod loader and all — from one window. The window is up in under a
+side by side and launch any of them — sign-in, version, mod loader and all —
+from one window. The window is up in under a
 second, and the game is running one or two seconds after you press Play.
 
 <p align="center">
@@ -34,8 +34,10 @@ second, and the game is running one or two seconds after you press Play.
   loader goes into the shared store — Fabric and Quilt as a profile from their
   meta service, NeoForge and Forge through their own installer. Anything you
   have played before is already on disk and needs no install at all.
-- **Switches with symlinks**, so the game keeps writing its saves, screenshots
-  and configs into the instance directory exactly as before.
+- **Runs every instance in its own folder.** The game is started with the
+  instance as its game directory, so saves, screenshots and configs land
+  there — no links, nothing to switch, and the official launcher's
+  `.minecraft` is never touched. It is only read, when you import it.
 - **Puts the instance on a workbench.** Mods, configs, worlds, resource and
   shader packs, screenshots, logs and crash reports each get a tab with a
   filter. Switch a mod off without deleting it, open a config in your editor,
@@ -85,15 +87,18 @@ from the application menu.
    local account plays single-player in full but is rejected by servers running
    in online mode.
 2. **Pick an instance** on the left, or press **+** to make one. On the
-   very first start, with no instances yet, your existing `.minecraft` is
-   moved in as the instance *Default* — renamed rather than copied, and
-   linked back — so the worlds, mods and settings already there are the
-   first instance. The mark in the top-left corner leads back to the start
-   screen, which offers to play the active instance — the one `.minecraft`
-   points to, which the official launcher would start too — and sums up the
-   playtime: the total, the last two weeks day by day, and how it splits
-   across the instances. Right-click an instance, or press its **⋯**, for
-   Play, Set active, Overview, Settings, its folder, Duplicate and Delete.
+   very first start, with no instances yet, the start screen offers two
+   ways in: **Import your .minecraft** copies the worlds, mods and settings
+   already there into the instance *Default* (worlds and screenshots are
+   optional; the game files go into the shared store, copied too), and
+   **Start empty** makes a fresh one. `.minecraft` itself is only read, so
+   the official launcher keeps working exactly as before; an import can
+   also be done later from **+**. The mark in the top-left corner leads
+   back to the start screen, which offers to play the instance you picked
+   last — remembered across restarts — and sums up the playtime: the
+   total, the last two weeks day by day, and how it splits across the
+   instances. Right-click an instance, or press its **⋯**, for Play,
+   Overview, Settings, its folder, Duplicate and Delete.
    The version fields open a list — Minecraft releases from Mojang, loader
    builds from the loader's own service — with a filter, and accept a typed version the list
    does not know yet. New instances are empty and instant; a loader is
@@ -129,12 +134,10 @@ starts.
 
 | Command | What it does |
 |---|---|
-| `list` | Show instances with their version, loader and counts |
+| `list` | Show instances with their counts, marking the one used last |
 | `create <name> [--clone <src>]` | Create an instance, empty by default |
-| `switch <name>` | Make an instance the active one |
-| `delete <name>` | Remove an instance (never the active one) |
-| `adopt [name]` | Turn the current `.minecraft` into an instance (the GUI does this on its first start) |
-| `restore` | Put the original `.minecraft` back |
+| `import [name] [--no-saves] [--no-screenshots]` | Copy the official launcher's `.minecraft` into a new instance (*Default* unless named), leaving it untouched |
+| `delete <name>` | Remove an instance |
 | `options list <name>` | The saved copies of an instance's `options.txt`, with how far each is from the current one |
 | `options save <name> [label]` / `options restore <name> [snapshot]` | Keep a copy of the game options, or put one back (`latest` by default; the replaced file is kept) |
 | `options diff <name> [snapshot]` | The settings a restore would change |
@@ -154,14 +157,18 @@ starts.
 
 ## How it works
 
-### Instances and the symlink
+### Instances
 
-Instances live in `~/.minecraft-instances/<name>` (configurable). Switching
-moves any real `~/.minecraft` aside and links it to the chosen instance, so the
-game — and any other launcher — finds it where it expects.
+Instances live in the instances directory — `instances/` next to the
+launcher's configuration by default, configurable with
+`config instances-path`. Each is started with itself as the game directory
+(`--gameDir` and the working directory), so instances sit side by side and
+there is nothing to switch.
 
-Launching activates the instance first, because the game's working directory is
-that symlink.
+The official launcher's `.minecraft` is only ever read, to import it. Versions
+before 2 replaced it with a link to the "active" instance; on its first start
+a newer version removes such a link — only one pointing into the instances
+directory — and puts the original back from where it was parked.
 
 ### The shared store
 
@@ -179,8 +186,8 @@ shared/
 
 Instances keep only what is yours: `mods`, `config`, `saves`, `resourcepacks`,
 `shaderpacks`, `screenshots`, `options.txt` and the rest. Every shared path is
-passed to the game explicitly on the command line, which is what lets the
-shared store and the symlink coexist.
+passed to the game explicitly on the command line, which is what lets an
+instance hold nothing but its own things.
 
 `migrate` hard-links an instance's existing copies into the store. It only
 reads the instances, costs no extra disk space, and deletes nothing.
@@ -243,7 +250,7 @@ otherwise would be worse than saying so.
 |---|---|
 | Linux | Full support |
 | macOS | Supported; release builds are unsigned, so Gatekeeper needs a right-click → Open on first run |
-| Windows | Symlinks need Developer Mode or an administrator; the CLI and GUI both build |
+| Windows | Supported; no Developer Mode or administrator needed, the CLI and GUI both build |
 
 ## Development
 
