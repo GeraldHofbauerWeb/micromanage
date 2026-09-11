@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/proc"
 )
 
 // osVersionOnce caches the host OS version; resolving it can cost a subprocess
@@ -54,7 +56,7 @@ func runCommand(name string, args ...string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	out, err := exec.CommandContext(ctx, name, args...).Output()
+	out, err := proc.Hide(exec.CommandContext(ctx, name, args...)).Output()
 	if err != nil {
 		return ""
 	}

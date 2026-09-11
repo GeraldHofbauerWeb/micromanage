@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/proc"
 )
 
 // Runtime is one Java installation found on the machine.
@@ -321,7 +323,7 @@ func probeRuntime(ctx context.Context, c probe) Runtime {
 	defer cancel()
 
 	// `java -version` writes to stderr.
-	out, err := exec.CommandContext(probeCtx, c.path, "-version").CombinedOutput()
+	out, err := proc.Hide(exec.CommandContext(probeCtx, c.path, "-version")).CombinedOutput()
 	if err != nil {
 		rt.Broken = true
 		rt.Reason = strings.TrimSpace(firstLine(string(out)))

@@ -26,6 +26,7 @@ import (
 	"github.com/GeraldHofbauerWeb/instant-launcher/internal/download"
 	"github.com/GeraldHofbauerWeb/instant-launcher/internal/instance"
 	"github.com/GeraldHofbauerWeb/instant-launcher/internal/launch"
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/proc"
 )
 
 // Endpoints are the services the loaders publish through. They are a struct
@@ -370,7 +371,7 @@ func (c *Client) runInstaller(ctx context.Context, id, url, javaPath string, pro
 	}
 	defer logFile.Close()
 
-	cmd := exec.CommandContext(ctx, javaPath, "-jar", jar, "--installClient", c.Layout.Root)
+	cmd := proc.Hide(exec.CommandContext(ctx, javaPath, "-jar", jar, "--installClient", c.Layout.Root))
 	cmd.Dir = c.Layout.Loaders()
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

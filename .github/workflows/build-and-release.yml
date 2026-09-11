@@ -158,12 +158,16 @@ jobs:
         CGO_ENABLED: ${{ matrix.cgo }}
       run: |
         BINARY_NAME="instant-launcher"
+        # A GUI-subsystem binary, so Windows does not open a console window
+        # beside the launcher.
+        EXTRA_LDFLAGS=""
         if [ "${{ matrix.goos }}" = "windows" ]; then
           BINARY_NAME="${BINARY_NAME}.exe"
+          EXTRA_LDFLAGS="-H windowsgui"
         fi
 
         mkdir -p dist
-        go build -ldflags="-s -w -X main.Version=${GITHUB_REF_NAME} -X main.defaultMSAClientID=${{ vars.MSA_CLIENT_ID }}" \
+        go build -ldflags="-s -w ${EXTRA_LDFLAGS} -X main.Version=${GITHUB_REF_NAME} -X main.defaultMSAClientID=${{ vars.MSA_CLIENT_ID }}" \
           -o "dist/${BINARY_NAME}" ./cmd/instant-launcher
 
         cd dist

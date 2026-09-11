@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/GeraldHofbauerWeb/instant-launcher/internal/proc"
 )
 
 // Process is a running game.
@@ -54,7 +56,7 @@ func Start(ctx context.Context, spec Spec) (*Process, error) {
 		return nil, fmt.Errorf("preparing the game directory: %w", err)
 	}
 
-	cmd := exec.CommandContext(ctx, spec.JavaPath, spec.Args...)
+	cmd := proc.Hide(exec.CommandContext(ctx, spec.JavaPath, spec.Args...))
 	cmd.Dir = spec.GameDir
 	if spec.Env != nil {
 		cmd.Env = spec.Env
